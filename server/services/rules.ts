@@ -1,7 +1,7 @@
 import {
   BANNED_VERTICALS, CLUSTER_NICHES, NON_US_TLDS, SPAM_TLDS, RULE_BY_CODE, DEFAULT_ANCHOR_BANDS,
   type AnchorBands, type AnchorType, type Cluster, type Verdict,
-} from "./constants";
+} from "./constants.js";
 
 const DAY = 86_400_000;
 

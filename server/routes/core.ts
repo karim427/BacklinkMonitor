@@ -1,13 +1,13 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { db, schema as s } from "../db";
+import { db, schema as s } from "../db/index.js";
 import {
   ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
-} from "../services/constants";
-import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules";
-import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService";
-import { aiStatus } from "../services/ai";
+} from "../services/constants.js";
+import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules.js";
+import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
+import { aiStatus } from "../services/ai.js";
 
 export const core = Router();
 
@@ -24,11 +24,11 @@ const monthParam = (req: Request) => {
 const addMonths = (m: string, n: number) => { const [y, mo] = m.split("-").map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return monthKey(d); };
 
 /* ---------------- enrichment ---------------- */
-export function loadLinks() {
-  const rows = db.select().from(s.links).orderBy(desc(s.links.placedAt)).all();
-  const cl = new Map(db.select().from(s.clients).all().map((c) => [c.id, c]));
-  const dn = new Map(db.select().from(s.donors).all().map((d) => [d.id, d]));
-  const tp = new Map(db.select().from(s.targetPages).all().map((t) => [t.id, t]));
+export async function loadLinks() {
+  const rows = (await db.select().from(s.links).orderBy(desc(s.links.placedAt)));
+  const cl = new Map((await db.select().from(s.clients)).map((c) => [c.id, c]));
+  const dn = new Map((await db.select().from(s.donors)).map((d) => [d.id, d]));
+  const tp = new Map((await db.select().from(s.targetPages)).map((t) => [t.id, t]));
   const now = new Date();
   return rows.map((l) => ({
     ...l,
@@ -37,7 +37,6 @@ export function loadLinks() {
     due: dueLabel(l.nextCheckAt, now),
   }));
 }
-type EnrichedLink = ReturnType<typeof loadLinks>[number];
 
 const monthTargetFor = (client: typeof s.clients.$inferSelect, overrides: (typeof s.clientMonthTargets.$inferSelect)[], month: string) => {
   const o = overrides.find((x) => x.clientId === client.id && x.month === month);
@@ -45,13 +44,13 @@ const monthTargetFor = (client: typeof s.clients.$inferSelect, overrides: (typeo
 };
 
 /* ---------------- dashboard ---------------- */
-core.get("/dashboard", wrap((req) => {
+core.get("/dashboard", wrap(async (req) => {
   const month = monthParam(req);
-  const settings = getSettings();
-  const links = loadLinks();
-  const clients = db.select().from(s.clients).all();
-  const overrides = db.select().from(s.clientMonthTargets).all();
-  const ws = db.select().from(s.workspaceMonthTargets).where(eq(s.workspaceMonthTargets.month, month)).get();
+  const settings = await getSettings();
+  const links = await loadLinks();
+  const clients = (await db.select().from(s.clients));
+  const overrides = (await db.select().from(s.clientMonthTargets));
+  const ws = (await db.select().from(s.workspaceMonthTargets).where(eq(s.workspaceMonthTargets.month, month)))[0];
   const target = ws?.target ?? clients.reduce((a, c) => a + monthTargetFor(c, overrides, month).target, 0);
   const inMonth = links.filter((l) => l.month === month);
   const prog = targetProgress(links as any, month, target);
@@ -62,7 +61,7 @@ core.get("/dashboard", wrap((req) => {
 
   // anchor mix: rolling 3 months per target page that has links
   const start = addMonths(month, -2);
-  const pages = db.select().from(s.targetPages).all();
+  const pages = (await db.select().from(s.targetPages));
   const anchor = pages.map((p) => {
     const ls = links.filter((l) => l.targetPageId === p.id && l.month >= start && l.month <= month && l.verdict !== "Not relevant");
     return { targetPageId: p.id, client: clients.find((c) => c.id === p.clientId)?.name, keyword: p.keyword, linkCount: ls.length, ...anchorMix(ls, settings.anchorBands) };
@@ -88,10 +87,10 @@ core.get("/dashboard", wrap((req) => {
     rechecksDue: dueList.slice(0, 8), lostLinks: lost.slice(0, 8),
   };
 }));
-core.put("/dashboard/target", wrap((req) => {
+core.put("/dashboard/target", wrap(async (req) => {
   const b = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/), target: z.number().int().min(0).nullable() }).parse(req.body);
-  if (b.target === null) db.delete(s.workspaceMonthTargets).where(eq(s.workspaceMonthTargets.month, b.month)).run();
-  else db.insert(s.workspaceMonthTargets).values({ month: b.month, target: b.target }).onConflictDoUpdate({ target: s.workspaceMonthTargets.month, set: { target: b.target } }).run();
+  if (b.target === null) (await db.delete(s.workspaceMonthTargets).where(eq(s.workspaceMonthTargets.month, b.month)));
+  else (await db.insert(s.workspaceMonthTargets).values({ month: b.month, target: b.target }).onConflictDoUpdate({ target: s.workspaceMonthTargets.month, set: { target: b.target } }));
   return { ok: true };
 }));
 
@@ -103,12 +102,12 @@ const clientBody = z.object({
 });
 const slugify = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-core.get("/clients", wrap((req) => {
+core.get("/clients", wrap(async (req) => {
   const month = monthParam(req);
-  const clients = db.select().from(s.clients).orderBy(s.clients.name).all();
-  const overrides = db.select().from(s.clientMonthTargets).all();
-  const pages = db.select().from(s.targetPages).all();
-  const links = loadLinks();
+  const clients = (await db.select().from(s.clients).orderBy(s.clients.name));
+  const overrides = (await db.select().from(s.clientMonthTargets));
+  const pages = (await db.select().from(s.targetPages));
+  const links = await loadLinks();
   const rows = clients.map((c) => {
     const t = monthTargetFor(c, overrides, month);
     const p = targetProgress(links.filter((l) => l.clientId === c.id) as any, month, t.target);
@@ -122,23 +121,23 @@ core.get("/clients", wrap((req) => {
     },
   };
 }));
-core.post("/clients", wrap((req, res) => {
+core.post("/clients", wrap(async (req, res) => {
   const b = clientBody.parse(req.body);
   res.status(201);
-  return db.insert(s.clients).values({ ...b, slug: slugify(b.name) }).returning().get();
+  return (await db.insert(s.clients).values({ ...b, slug: slugify(b.name) }).returning())[0];
 }));
-core.put("/clients/:id", wrap((req) => {
+core.put("/clients/:id", wrap(async (req) => {
   const b = clientBody.partial().parse(req.body);
-  return db.update(s.clients).set(b).where(eq(s.clients.id, idOf(req))).returning().get();
+  return (await db.update(s.clients).set(b).where(eq(s.clients.id, idOf(req))).returning())[0];
 }));
-core.delete("/clients/:id", wrap((req) => { db.delete(s.clients).where(eq(s.clients.id, idOf(req))).run(); return { ok: true }; }));
+core.delete("/clients/:id", wrap(async (req) => { (await db.delete(s.clients).where(eq(s.clients.id, idOf(req)))); return { ok: true }; }));
 
-core.get("/clients/:id", wrap((req) => {
+core.get("/clients/:id", wrap(async (req) => {
   const id = idOf(req);
-  const client = db.select().from(s.clients).where(eq(s.clients.id, id)).get();
+  const client = (await db.select().from(s.clients).where(eq(s.clients.id, id)))[0];
   if (!client) throw new HttpError(404, "Client not found");
-  const overrides = db.select().from(s.clientMonthTargets).where(eq(s.clientMonthTargets.clientId, id)).all();
-  const links = loadLinks().filter((l) => l.clientId === id);
+  const overrides = (await db.select().from(s.clientMonthTargets).where(eq(s.clientMonthTargets.clientId, id)));
+  const links = (await loadLinks()).filter((l) => l.clientId === id);
   const cur = monthKey(new Date());
   const months = Array.from({ length: 13 }, (_, i) => addMonths(cur, i - 11)).reverse().map((m) => {
     const t = monthTargetFor(client, overrides, m);
@@ -151,17 +150,17 @@ core.get("/clients/:id", wrap((req) => {
     cards: {
       thisMonth: months.find((m) => m.month === cur), lastMonth: last,
       allTime: links.filter((l) => l.verdict === "Relevant").length,
-      targetPages: db.select().from(s.targetPages).where(eq(s.targetPages.clientId, id)).all().length,
+      targetPages: (await db.select().from(s.targetPages).where(eq(s.targetPages.clientId, id))).length,
       activeMonths: months.filter((m) => m.total > 0).length,
     },
   };
 }));
-core.put("/clients/:id/months/:month", wrap((req) => {
+core.put("/clients/:id/months/:month", wrap(async (req) => {
   const id = idOf(req); const month = String(req.params.month);
   const b = z.object({ target: z.number().int().min(0).nullable() }).parse(req.body);
-  if (b.target === null) { db.delete(s.clientMonthTargets).where(and(eq(s.clientMonthTargets.clientId, id), eq(s.clientMonthTargets.month, month))).run(); return { ok: true, reset: true }; }
-  db.insert(s.clientMonthTargets).values({ clientId: id, month, target: b.target })
-    .onConflictDoUpdate({ target: [s.clientMonthTargets.clientId, s.clientMonthTargets.month], set: { target: b.target } }).run();
+  if (b.target === null) { (await db.delete(s.clientMonthTargets).where(and(eq(s.clientMonthTargets.clientId, id), eq(s.clientMonthTargets.month, month)))); return { ok: true, reset: true }; }
+  (await db.insert(s.clientMonthTargets).values({ clientId: id, month, target: b.target })
+    .onConflictDoUpdate({ target: [s.clientMonthTargets.clientId, s.clientMonthTargets.month], set: { target: b.target } }));
   return { ok: true };
 }));
 
@@ -171,25 +170,25 @@ const tpBody = z.object({
   currentRDs: z.number().int().min(0).default(0), rdsNeeded: z.number().int().min(0).default(0),
   status: z.enum(["Pending", "Approved", "Rejected"]).default("Pending"), approvalMonth: z.string().nullish(),
 });
-core.get("/target-pages", wrap(() => {
-  const clients = new Map(db.select().from(s.clients).all().map((c) => [c.id, c]));
-  const rows = db.select().from(s.targetPages).orderBy(desc(s.targetPages.id)).all().map((t) => ({ ...t, client: clients.get(t.clientId) ?? null }));
+core.get("/target-pages", wrap(async () => {
+  const clients = new Map((await db.select().from(s.clients)).map((c) => [c.id, c]));
+  const rows = (await db.select().from(s.targetPages).orderBy(desc(s.targetPages.id))).map((t) => ({ ...t, client: clients.get(t.clientId) ?? null }));
   return { rows, totals: { approved: rows.filter((r) => r.status === "Approved").length, pending: rows.filter((r) => r.status === "Pending").length, rejected: rows.filter((r) => r.status === "Rejected").length, linksNeeded: rows.filter((r) => r.status !== "Rejected").reduce((a, r) => a + r.linksNeeded, 0) } };
 }));
-core.post("/target-pages/preview", wrap((req) => stage1(z.object({ rdsNeeded: z.number().min(0), currentRDs: z.number().min(0).default(0) }).parse(req.body).rdsNeeded)));
-core.post("/target-pages", wrap((req, res) => {
+core.post("/target-pages/preview", wrap(async (req) => stage1(z.object({ rdsNeeded: z.number().min(0), currentRDs: z.number().min(0).default(0) }).parse(req.body).rdsNeeded)));
+core.post("/target-pages", wrap(async (req, res) => {
   const b = tpBody.parse(req.body); const r = stage1(b.rdsNeeded, b.currentRDs);
   res.status(201);
-  return db.insert(s.targetPages).values({ ...b, linksNeeded: r.linksNeeded, monthsToClose: r.monthsToClose }).returning().get();
+  return (await db.insert(s.targetPages).values({ ...b, linksNeeded: r.linksNeeded, monthsToClose: r.monthsToClose }).returning())[0];
 }));
-core.put("/target-pages/:id", wrap((req) => {
+core.put("/target-pages/:id", wrap(async (req) => {
   const b = tpBody.partial().parse(req.body);
   const patch: Record<string, unknown> = { ...b };
   if (b.rdsNeeded !== undefined) { const r = stage1(b.rdsNeeded, b.currentRDs ?? 0); patch.linksNeeded = r.linksNeeded; patch.monthsToClose = r.monthsToClose; }
   if (b.status === "Approved" && !b.approvalMonth) patch.approvalMonth = monthKey(new Date());
-  return db.update(s.targetPages).set(patch).where(eq(s.targetPages.id, idOf(req))).returning().get();
+  return (await db.update(s.targetPages).set(patch).where(eq(s.targetPages.id, idOf(req))).returning())[0];
 }));
-core.delete("/target-pages/:id", wrap((req) => { db.delete(s.targetPages).where(eq(s.targetPages.id, idOf(req))).run(); return { ok: true }; }));
+core.delete("/target-pages/:id", wrap(async (req) => { (await db.delete(s.targetPages).where(eq(s.targetPages.id, idOf(req)))); return { ok: true }; }));
 
 /* ---------------- links ---------------- */
 const linkBody = z.object({
@@ -200,41 +199,41 @@ const linkBody = z.object({
   verdict: z.enum(VERDICTS).optional(), stage: z.enum(STAGES).optional(), action: z.enum(LINK_ACTIONS).optional(),
   autoVerify: z.boolean().default(false),
 });
-function resolveDonor(b: { donorId?: number | null; donorDomain?: string | null; sourceUrl: string }, clientId: number) {
+async function resolveDonor(b: { donorId?: number | null; donorDomain?: string | null; sourceUrl: string }, clientId: number) {
   if (b.donorId) return b.donorId;
   const domain = (b.donorDomain || hostOf(b.sourceUrl)).replace(/^www\./, "");
-  const found = db.select().from(s.donors).where(eq(s.donors.domain, domain)).get();
+  const found = (await db.select().from(s.donors).where(eq(s.donors.domain, domain)))[0];
   if (found) return found.id;
-  const client = db.select().from(s.clients).where(eq(s.clients.id, clientId)).get();
-  return db.insert(s.donors).values({ domain, name: domain, cluster: client?.cluster ?? CLUSTERS[0] }).returning().get().id;
+  const client = (await db.select().from(s.clients).where(eq(s.clients.id, clientId)))[0];
+  return (await db.insert(s.donors).values({ domain, name: domain, cluster: client?.cluster ?? CLUSTERS[0] }).returning())[0].id;
 }
-core.get("/links", wrap(() => {
-  const all = loadLinks();
+core.get("/links", wrap(async () => {
+  const all = await loadLinks();
   const count = (v: string) => all.filter((l) => l.verdict === v).length;
   const now = new Date();
   return { rows: all, totals: { total: all.length, relevant: count("Relevant"), partly: count("Partly relevant"), notRelevant: count("Not relevant"), dueRechecks: all.filter((l) => l.stage !== "Lost" && l.nextCheckAt && l.nextCheckAt <= now).length } };
 }));
-core.get("/links/export", (req, res, next) => {
+core.get("/links/export", async (req, res, next) => {
   try {
     const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const head = ["Client", "Source URL", "Target URL", "Anchor", "Anchor type", "Donor", "DR", "Verdict", "Stage", "Action", "Placed", "Last checked", "Next check", "Rejects"];
-    const lines = loadLinks().map((l) => [l.client?.name, l.sourceUrl, l.targetUrl, l.anchorText, l.anchorType, l.donor?.domain, l.donor?.dr, l.verdict, l.stage, l.action,
+    const lines = (await loadLinks()).map((l) => [l.client?.name, l.sourceUrl, l.targetUrl, l.anchorText, l.anchorType, l.donor?.domain, l.donor?.dr, l.verdict, l.stage, l.action,
       l.placedAt?.toISOString().slice(0, 10), l.lastCheckedAt?.toISOString().slice(0, 10), l.nextCheckAt?.toISOString().slice(0, 10), (l.rejectReasons ?? []).join("|")].map(q).join(","));
     res.setHeader("content-type", "text/csv"); res.setHeader("content-disposition", 'attachment; filename="backlink-review-log.csv"');
     res.send([head.map(q).join(","), ...lines].join("\n"));
   } catch (e) { next(e); }
 });
-core.get("/links/:id", wrap((req) => {
-  const l = loadLinks().find((x) => x.id === idOf(req));
+core.get("/links/:id", wrap(async (req) => {
+  const l = (await loadLinks()).find((x) => x.id === idOf(req));
   if (!l) throw new HttpError(404, "Link not found");
-  return { ...l, checkRuns: db.select().from(s.checkRuns).where(eq(s.checkRuns.linkId, l.id)).orderBy(desc(s.checkRuns.ranAt)).all() };
+  return { ...l, checkRuns: (await db.select().from(s.checkRuns).where(eq(s.checkRuns.linkId, l.id)).orderBy(desc(s.checkRuns.ranAt))) };
 }));
 async function createLink(b: z.infer<typeof linkBody>) {
-  const donorId = resolveDonor(b, b.clientId);
+  const donorId = await resolveDonor(b, b.clientId);
   const placedAt = b.placedAt ? new Date(b.placedAt) : null;
   const { autoVerify, donorDomain, donorId: _d, ...rest } = b;
-  const values = { ...rest, donorId, placedAt, ...(placedAt ? scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
-  const row = db.insert(s.links).values(values).returning().get();
+  const values = { ...rest, donorId, placedAt, ...(placedAt ? await scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
+  const row = (await db.insert(s.links).values(values).returning())[0];
   if (autoVerify) return runVerification(row.id);
   return row;
 }
@@ -243,14 +242,14 @@ core.put("/links/:id", wrap(async (req) => {
   const id = idOf(req); const b = linkBody.partial().parse(req.body);
   const { autoVerify, donorDomain, ...rest } = b;
   const patch: Record<string, unknown> = { ...rest };
-  if (b.placedAt !== undefined) { const p = b.placedAt ? new Date(b.placedAt) : null; patch.placedAt = p; if (p) Object.assign(patch, scheduleOnPlace(p)); }
-  if (!b.donorId && donorDomain) patch.donorId = resolveDonor({ donorDomain, sourceUrl: b.sourceUrl ?? "" }, b.clientId ?? 0);
-  const row = db.update(s.links).set(patch).where(eq(s.links.id, id)).returning().get();
+  if (b.placedAt !== undefined) { const p = b.placedAt ? new Date(b.placedAt) : null; patch.placedAt = p; if (p) Object.assign(patch, await scheduleOnPlace(p)); }
+  if (!b.donorId && donorDomain) patch.donorId = await resolveDonor({ donorDomain, sourceUrl: b.sourceUrl ?? "" }, b.clientId ?? 0);
+  const row = (await db.update(s.links).set(patch).where(eq(s.links.id, id)).returning())[0];
   if (autoVerify) await runVerification(id);
   return row;
 }));
-core.delete("/links/:id", wrap((req) => { db.delete(s.links).where(eq(s.links.id, idOf(req))).run(); return { ok: true }; }));
-core.post("/links/:id/verify", wrap((req) => runVerification(idOf(req))));
+core.delete("/links/:id", wrap(async (req) => { (await db.delete(s.links).where(eq(s.links.id, idOf(req)))); return { ok: true }; }));
+core.post("/links/:id/verify", wrap(async (req) => runVerification(idOf(req))));
 
 /** CSV import: header row with columns client, sourceUrl, targetUrl, anchorText, anchorType, placement, reviewer, placedAt */
 function parseCsv(text: string) {
@@ -268,7 +267,7 @@ function parseCsv(text: string) {
 core.post("/links/import", wrap(async (req) => {
   const { csv } = z.object({ csv: z.string().min(1) }).parse(req.body);
   const [head, ...rows] = parseCsv(csv); const idx = (n: string) => head.findIndex((h) => h.trim().toLowerCase() === n.toLowerCase());
-  const clients = db.select().from(s.clients).all();
+  const clients = (await db.select().from(s.clients));
   const result = { created: 0, errors: [] as { row: number; error: string }[] };
   for (const [i, r] of rows.entries()) {
     const get = (n: string) => (idx(n) >= 0 ? r[idx(n)]?.trim() : undefined) || undefined;
@@ -284,9 +283,9 @@ core.post("/links/import", wrap(async (req) => {
 }));
 
 /* ---------------- rechecks ---------------- */
-core.get("/rechecks", wrap(() => {
+core.get("/rechecks", wrap(async () => {
   const now = new Date();
-  const rows = loadLinks().filter((l) => l.stage !== "Lost" && l.nextCheckAt).sort((a, b) => a.nextCheckAt!.getTime() - b.nextCheckAt!.getTime());
+  const rows = (await loadLinks()).filter((l) => l.stage !== "Lost" && l.nextCheckAt).sort((a, b) => a.nextCheckAt!.getTime() - b.nextCheckAt!.getTime());
   const due = rows.filter((l) => l.nextCheckAt! <= now);
   const domains = new Map<string, number>();
   for (const l of due) if (l.donor) domains.set(l.donor.domain, (domains.get(l.donor.domain) ?? 0) + 1);
@@ -299,24 +298,24 @@ core.get("/rechecks", wrap(() => {
 core.post("/rechecks/run-due", wrap(async () => ({ results: await runDueRechecks() })));
 
 /* ---------------- settings ---------------- */
-core.get("/settings", wrap(() => ({
-  settings: getSettings(), rejectRules: REJECT_RULES, ai: aiStatus(),
+core.get("/settings", wrap(async () => ({
+  settings: await getSettings(), rejectRules: REJECT_RULES, ai: aiStatus(),
   ahrefs: {
     credentialLoaded: !!process.env.AHREFS_API_KEY, mock: !process.env.AHREFS_API_KEY,
-    donorsSynced: db.select().from(s.donors).all().filter((d) => d.ahrefsSyncedAt).length, donorsTotal: db.select().from(s.donors).all().length,
-    lastSync: db.select().from(s.donors).all().reduce<Date | null>((a, d) => (d.ahrefsSyncedAt && (!a || d.ahrefsSyncedAt > a) ? d.ahrefsSyncedAt : a), null),
+    donorsSynced: (await db.select().from(s.donors)).filter((d) => d.ahrefsSyncedAt).length, donorsTotal: (await db.select().from(s.donors)).length,
+    lastSync: (await db.select().from(s.donors)).reduce<Date | null>((a, d) => (d.ahrefsSyncedAt && (!a || d.ahrefsSyncedAt > a) ? d.ahrefsSyncedAt : a), null),
   },
 })));
 const bandSchema = z.object({ min: z.number(), max: z.number() });
-core.put("/settings", wrap((req) => {
+core.put("/settings", wrap(async (req) => {
   const b = z.object({
     verifierUserAgent: z.string().min(1), firstRecheckDays: z.number().int().min(1), nextRecheckDays: z.number().int().min(1),
     fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0),
     anchorBands: z.object({ Branded: bandSchema, Partial: bandSchema, Natural: bandSchema, Exact: bandSchema }),
   }).partial().parse(req.body);
   if (b.anchorBands) { const err = validateBands(b.anchorBands as AnchorBands); if (err) throw new HttpError(400, err); }
-  const next: AppSettings = { ...getSettings(), ...b } as AppSettings;
-  db.insert(s.settings).values({ key: "app", value: next }).onConflictDoUpdate({ target: s.settings.key, set: { value: next } }).run();
+  const next: AppSettings = { ...(await getSettings()), ...b } as AppSettings;
+  (await db.insert(s.settings).values({ key: "app", value: next }).onConflictDoUpdate({ target: s.settings.key, set: { value: next } }));
   return next;
 }));
 void inArray;

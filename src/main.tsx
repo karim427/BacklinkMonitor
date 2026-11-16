@@ -16,12 +16,13 @@ import RechecksPage from "./pages/RechecksPage";
 import ProspectsPage from "./pages/ProspectsPage";
 import HaroPage from "./pages/HaroPage";
 import SettingsPage from "./pages/SettingsPage";
+import { AuthGate } from "./components/AuthGate";
 
 const NotFound = () => <EmptyState title="Page not found" hint="That page doesn't exist." action={<Button asChild><Link to="/">Back to dashboard</Link></Button>} />;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <AuthGate><BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
@@ -40,6 +41,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </BrowserRouter></AuthGate>
   </React.StrictMode>,
 );

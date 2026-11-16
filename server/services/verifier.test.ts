@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHtml, verifyLink } from "./verifier";
+import { parseHtml, verifyLink } from "./verifier.js";
 
 const input = { sourceUrl: "https://donor.com/post", targetUrl: "https://client.com/page", userAgent: "test", competitorDomains: ["rival.com"] };
 const page = (body: string, head = "") => `<html><head>${head}</head><body>${body}</body></html>`;

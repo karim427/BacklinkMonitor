@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   anchorMix, applyRecheck, checkA, dueLabel, evaluateRejectRules, napMatch, scheduleFirstCheck, scheduleNextCheck,
   stage1, targetProgress, validateBands, verdictFor, type DonorMetrics, type LinkFacts,
-} from "./rules";
-import { REJECT_RULES, DEFAULT_ANCHOR_BANDS } from "./constants";
+} from "./rules.js";
+import { REJECT_RULES, DEFAULT_ANCHOR_BANDS } from "./constants.js";
 
 const donor: DonorMetrics = { domain: "goodblog.com", dr: 45, usTrafficPct: 80, organicTraffic: 5000, referringDomains: 300, linkedDomains: 200, cluster: "Tech / SaaS", isLocal: false };
 const base = (o: Partial<LinkFacts> = {}, d: Partial<DonorMetrics> = {}): LinkFacts => ({

@@ -3,8 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Download, Upload } from "lucide-react";
 import { Button, EmptyState, ErrorBanner, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
-import { del, post, useApi } from "@/lib/api";
-import { fmtDate } from "@/lib/utils";
+import { authHeaders, del, post, useApi } from "@/lib/api";
+import { downloadText, fmtDate } from "@/lib/utils";
 import { Pager, PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, usePaged, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
 import { STAGES, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
@@ -33,6 +33,10 @@ export default function LinksPage() {
   const t = data?.totals;
 
   async function verify(id: number) { setBusyId(id); setRowErr(null); try { await post(`/links/${id}/verify`); reload(); } catch (e: any) { setRowErr(e.message); } finally { setBusyId(null); } }
+  async function exportLog() {
+    try { const r = await fetch("/api/links/export", { headers: authHeaders() }); if (!r.ok) throw new Error(`Export failed (${r.status})`); downloadText("backlink-review-log.csv", await r.text()); }
+    catch (e: any) { setRowErr(e.message); }
+  }
   async function onFile(file?: File) {
     if (!file) return;
     try { setImp(await post("/links/import", { csv: await file.text() })); reload(); } catch (e: any) { setRowErr(e.message); }
@@ -44,7 +48,7 @@ export default function LinksPage() {
       <PageHeader title="Links" description="Every backlink reviewed against Stage 1, checks A–C and the reject list." actions={<>
         <input ref={fileRef} type="file" accept=".csv" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" />Import CSV</Button>
-        <Button variant="outline" asChild><a href="/api/links/export"><Download className="h-4 w-4" />Export review log</a></Button>
+        <Button variant="outline" onClick={exportLog}><Download className="h-4 w-4" />Export review log</Button>
         <RefreshButton onClick={reload} loading={loading} />
       </>} />
       {(error || rowErr) && <div className="mb-4"><ErrorBanner message={(error || rowErr)!} onRetry={reload} /></div>}

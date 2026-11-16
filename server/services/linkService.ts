@@ -1,11 +1,11 @@
 import { and, eq, ne, gte, inArray } from "drizzle-orm";
-import { db, schema as s } from "../db";
-import { CLUSTERS, DEFAULT_SETTINGS, type AppSettings, type Cluster } from "./constants";
-import { applyRecheck, evaluateRejectRules, fixWindowEnd, scheduleFirstCheck, verdictFor, type DonorMetrics, type LinkFacts } from "./rules";
-import { verifyLink } from "./verifier";
+import { db, schema as s } from "../db/index.js";
+import { CLUSTERS, DEFAULT_SETTINGS, type AppSettings, type Cluster } from "./constants.js";
+import { applyRecheck, evaluateRejectRules, fixWindowEnd, scheduleFirstCheck, verdictFor, type DonorMetrics, type LinkFacts } from "./rules.js";
+import { verifyLink } from "./verifier.js";
 
-export function getSettings(): AppSettings {
-  const row = db.select().from(s.settings).where(eq(s.settings.key, "app")).get();
+export async function getSettings(): Promise<AppSettings> {
+  const row = (await db.select().from(s.settings).where(eq(s.settings.key, "app")))[0];
   return { ...DEFAULT_SETTINGS, ...((row?.value as Partial<AppSettings>) ?? {}) };
 }
 
@@ -19,15 +19,15 @@ export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(
 const SIX_MONTHS = 183 * 86_400_000;
 
 /** Contextual facts that need DB lookups: reuse + competing cash-buyer clients. */
-export function contextFacts(link: typeof s.links.$inferSelect, client: typeof s.clients.$inferSelect) {
-  const others = db.select().from(s.links).where(and(eq(s.links.donorId, link.donorId), ne(s.links.id, link.id))).all();
+export async function contextFacts(link: typeof s.links.$inferSelect, client: typeof s.clients.$inferSelect) {
+  const others = (await db.select().from(s.links).where(and(eq(s.links.donorId, link.donorId), ne(s.links.id, link.id))));
   const clientIds = new Set(others.map((l) => l.clientId));
   clientIds.delete(link.clientId);
   const cutoff = Date.now() - SIX_MONTHS;
   const reusedSameClient6mo = others.some((l) => l.clientId === link.clientId && l.verdict !== "Not relevant" && (l.placedAt ?? l.createdAt).getTime() >= cutoff);
   let competing = false;
   if (client.isCashBuyer && others.length) {
-    const cashClients = db.select().from(s.clients).where(and(eq(s.clients.isCashBuyer, true), inArray(s.clients.id, [...clientIds].length ? [...clientIds] : [-1]))).all();
+    const cashClients = (await db.select().from(s.clients).where(and(eq(s.clients.isCashBuyer, true), inArray(s.clients.id, [...clientIds].length ? [...clientIds] : [-1]))));
     competing = cashClients.some((c) => c.city && client.city && c.city.toLowerCase() === client.city.toLowerCase()) ||
       others.some((l) => l.sourceUrl === link.sourceUrl && l.clientId !== link.clientId && cashClients.some((c) => c.id === l.clientId));
   }
@@ -36,28 +36,28 @@ export function contextFacts(link: typeof s.links.$inferSelect, client: typeof s
 
 /** Run the verifier + rules for a link, persist a CheckRun and update the link. */
 export async function runVerification(linkId: number, fetchImpl?: typeof fetch) {
-  const link = db.select().from(s.links).where(eq(s.links.id, linkId)).get();
+  const link = (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0];
   if (!link) throw new Error("Link not found");
-  const donor = db.select().from(s.donors).where(eq(s.donors.id, link.donorId)).get()!;
-  const client = db.select().from(s.clients).where(eq(s.clients.id, link.clientId)).get()!;
-  const settings = getSettings();
-  db.update(s.links).set({ verificationStatus: "Checking" }).where(eq(s.links.id, linkId)).run();
+  const donor = (await db.select().from(s.donors).where(eq(s.donors.id, link.donorId)))[0]!;
+  const client = (await db.select().from(s.clients).where(eq(s.clients.id, link.clientId)))[0]!;
+  const settings = await getSettings();
+  (await db.update(s.links).set({ verificationStatus: "Checking" }).where(eq(s.links.id, linkId)));
 
-  const competitorDomains = db.select().from(s.clients).where(and(eq(s.clients.cluster, client.cluster), ne(s.clients.id, client.id))).all().map((c) => c.domain);
+  const competitorDomains = (await db.select().from(s.clients).where(and(eq(s.clients.cluster, client.cluster), ne(s.clients.id, client.id)))).map((c) => c.domain);
   const v = await verifyLink({ sourceUrl: link.sourceUrl, targetUrl: link.targetUrl, userAgent: settings.verifierUserAgent, competitorDomains }, fetchImpl);
   const now = new Date();
 
   if (!v.ok) {
     // Fetch failed: not a relevance failure. Mark Error and keep prior verdict; fall back to Ahrefs index (donor data) for rules.
-    db.insert(s.checkRuns).values({ linkId, ranAt: now, httpStatus: v.httpStatus ?? null, result: "error", error: v.error }).run();
-    db.update(s.links).set({ verificationStatus: "Error", lastCheckedAt: now }).where(eq(s.links.id, linkId)).run();
-    return db.select().from(s.links).where(eq(s.links.id, linkId)).get()!;
+    (await db.insert(s.checkRuns).values({ linkId, ranAt: now, httpStatus: v.httpStatus ?? null, result: "error", error: v.error }));
+    (await db.update(s.links).set({ verificationStatus: "Error", lastCheckedAt: now }).where(eq(s.links.id, linkId)));
+    return (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0]!;
   }
 
   const facts: LinkFacts = {
     donor: toDonorMetrics(donor), clientCluster: client.cluster as Cluster, sourceUrl: link.sourceUrl, clientId: client.id,
     linkFound: v.linkFound, rel: v.rel, placement: v.placement, outboundLinks: v.outboundLinks, targetMatched: v.targetMatched,
-    indexed: v.indexed, competitorLinked: v.competitorLinked, ...contextFacts(link, client),
+    indexed: v.indexed, competitorLinked: v.competitorLinked, ...(await contextFacts(link, client)),
   };
   const rejects = v.linkFound ? evaluateRejectRules(facts) : [];
   const isRecheck = !!link.lastCheckedAt && link.stage !== "Intake";
@@ -77,22 +77,22 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
     if (!v.linkFound) patch.rejectReasons = ["link_wrong_target"];
     void r;
   }
-  db.insert(s.checkRuns).values({
+  (await db.insert(s.checkRuns).values({
     linkId, ranAt: now, httpStatus: v.httpStatus ?? null, linkFound: v.linkFound, rel: v.rel ?? [], anchorFound: v.anchorFound,
     targetMatched: v.targetMatched, indexed: v.indexed, placementDetected: v.placement, outboundLinks: v.outboundLinks,
     result: (patch.verdict as string) ?? "ok",
-  }).run();
-  db.update(s.links).set(patch).where(eq(s.links.id, linkId)).run();
-  db.update(s.donors).set({ lastUsedAt: link.placedAt ?? now }).where(eq(s.donors.id, link.donorId)).run();
-  return db.select().from(s.links).where(eq(s.links.id, linkId)).get()!;
+  }));
+  (await db.update(s.links).set(patch).where(eq(s.links.id, linkId)));
+  (await db.update(s.donors).set({ lastUsedAt: link.placedAt ?? now }).where(eq(s.donors.id, link.donorId)));
+  return (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0]!;
 }
 
-export function scheduleOnPlace(placedAt: Date) {
-  return { stage: "Placed", ...scheduleFirstCheck(placedAt, getSettings()) };
+export async function scheduleOnPlace(placedAt: Date) {
+  return { stage: "Placed", ...scheduleFirstCheck(placedAt, await getSettings()) };
 }
 
 export async function runDueRechecks(now = new Date()) {
-  const due = db.select().from(s.links).where(and(ne(s.links.stage, "Lost"))).all().filter((l) => l.nextCheckAt && l.nextCheckAt <= now);
+  const due = (await db.select().from(s.links).where(and(ne(s.links.stage, "Lost")))).filter((l) => l.nextCheckAt && l.nextCheckAt <= now);
   const out: { id: number; verdict: string; error?: boolean }[] = [];
   for (const l of due) {
     const r = await runVerification(l.id);

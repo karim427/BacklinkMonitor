@@ -1,36 +1,36 @@
-import { sqliteTable, text, integer, real, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, serial, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 
-const ts = (name: string) => integer(name, { mode: "timestamp_ms" });
+const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const created = () => ts("created_at").notNull().$defaultFn(() => new Date());
-const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
+const json = <T>(name: string) => jsonb(name).$type<T>();
 
-export const clients = sqliteTable("clients", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const clients = pgTable("clients", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   domain: text("domain").notNull(),
   slug: text("slug").notNull().unique(),
   cluster: text("cluster").notNull(),
   city: text("city"), state: text("state"),
-  isCashBuyer: integer("is_cash_buyer", { mode: "boolean" }).notNull().default(false),
+  isCashBuyer: boolean("is_cash_buyer").notNull().default(false),
   defaultMonthlyTarget: integer("default_monthly_target").notNull().default(4),
   gbpName: text("gbp_name"), gbpAddress: text("gbp_address"), gbpPhone: text("gbp_phone"),
   createdAt: created(),
 });
 
-export const clientMonthTargets = sqliteTable("client_month_targets", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const clientMonthTargets = pgTable("client_month_targets", {
+  id: serial("id").primaryKey(),
   clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   month: text("month").notNull(),
   target: integer("target").notNull(),
 }, (t) => ({ uq: uniqueIndex("cmt_uq").on(t.clientId, t.month) }));
 
-export const workspaceMonthTargets = sqliteTable("workspace_month_targets", {
+export const workspaceMonthTargets = pgTable("workspace_month_targets", {
   month: text("month").primaryKey(),
   target: integer("target").notNull(),
 });
 
-export const targetPages = sqliteTable("target_pages", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const targetPages = pgTable("target_pages", {
+  id: serial("id").primaryKey(),
   clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   url: text("url").notNull(), keyword: text("keyword").notNull(),
   currentRDs: integer("current_rds").notNull().default(0),
@@ -42,8 +42,8 @@ export const targetPages = sqliteTable("target_pages", {
   createdAt: created(),
 });
 
-export const donors = sqliteTable("donors", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const donors = pgTable("donors", {
+  id: serial("id").primaryKey(),
   domain: text("domain").notNull().unique(), name: text("name"),
   dr: integer("dr").notNull().default(0),
   usTrafficPct: integer("us_traffic_pct").notNull().default(0),
@@ -51,7 +51,7 @@ export const donors = sqliteTable("donors", {
   referringDomains: integer("referring_domains").notNull().default(0),
   linkedDomains: integer("linked_domains").notNull().default(0),
   cluster: text("cluster").notNull(), niche: text("niche"),
-  isLocal: integer("is_local", { mode: "boolean" }).notNull().default(false),
+  isLocal: boolean("is_local").notNull().default(false),
   localArea: text("local_area"),
   lastUsedAt: ts("last_used_at"), ahrefsSyncedAt: ts("ahrefs_synced_at"),
   trafficHistory: json<number[]>("traffic_history"),
@@ -59,8 +59,8 @@ export const donors = sqliteTable("donors", {
   createdAt: created(),
 });
 
-export const links = sqliteTable("links", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const links = pgTable("links", {
+  id: serial("id").primaryKey(),
   clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   targetPageId: integer("target_page_id").references(() => targetPages.id, { onDelete: "set null" }),
   donorId: integer("donor_id").notNull().references(() => donors.id),
@@ -79,21 +79,21 @@ export const links = sqliteTable("links", {
   createdAt: created(),
 });
 
-export const checkRuns = sqliteTable("check_runs", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const checkRuns = pgTable("check_runs", {
+  id: serial("id").primaryKey(),
   linkId: integer("link_id").notNull().references(() => links.id, { onDelete: "cascade" }),
   ranAt: ts("ran_at").notNull().$defaultFn(() => new Date()),
   httpStatus: integer("http_status"),
-  linkFound: integer("link_found", { mode: "boolean" }),
+  linkFound: boolean("link_found"),
   rel: json<string[]>("rel"), anchorFound: text("anchor_found"),
-  targetMatched: integer("target_matched", { mode: "boolean" }),
-  indexed: integer("indexed", { mode: "boolean" }),
+  targetMatched: boolean("target_matched"),
+  indexed: boolean("indexed"),
   placementDetected: text("placement_detected"), outboundLinks: integer("outbound_links"),
   result: text("result"), error: text("error"),
 });
 
-export const citations = sqliteTable("citations", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const citations = pgTable("citations", {
+  id: serial("id").primaryKey(),
   clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   directory: text("directory").notNull(),
   name: text("name").notNull(), address: text("address").notNull(), phone: text("phone").notNull(),
@@ -102,8 +102,8 @@ export const citations = sqliteTable("citations", {
   updatedAt: ts("updated_at").notNull().$defaultFn(() => new Date()),
 });
 
-export const prospects = sqliteTable("prospects", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const prospects = pgTable("prospects", {
+  id: serial("id").primaryKey(),
   clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   domain: text("domain").notNull(), pageUrl: text("page_url"), pageTitle: text("page_title"), snippet: text("snippet"),
   score: integer("score").notNull().default(0), label: text("label").notNull().default("Not"),
@@ -113,8 +113,8 @@ export const prospects = sqliteTable("prospects", {
   discoveredAt: ts("discovered_at").notNull().$defaultFn(() => new Date()),
 });
 
-export const haroRequests = sqliteTable("haro_requests", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const haroRequests = pgTable("haro_requests", {
+  id: serial("id").primaryKey(),
   rawEmail: text("raw_email").notNull(),
   outlet: text("outlet"), journalist: text("journalist"), category: text("category"), title: text("title"),
   question: text("question"), requirements: text("requirements"), deadline: ts("deadline"),
@@ -125,7 +125,7 @@ export const haroRequests = sqliteTable("haro_requests", {
   updatedAt: ts("updated_at").notNull().$defaultFn(() => new Date()),
 });
 
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: json<unknown>("value"),
 });
