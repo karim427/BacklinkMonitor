@@ -235,7 +235,7 @@ async function createLink(b: z.infer<typeof linkBody>) {
   const { autoVerify, donorDomain, donorId: _d, ...rest } = b;
   const values = { ...rest, donorId, placedAt, ...(placedAt ? scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
   const row = db.insert(s.links).values(values).returning().get();
-  if (autoVerify) await runVerification(row.id);
+  if (autoVerify) return runVerification(row.id);
   return row;
 }
 core.post("/links", wrap(async (req, res) => { res.status(201); return createLink(linkBody.parse(req.body)); }));
