@@ -1,4 +1,4 @@
-import { AdminOnly } from "@/lib/auth";
+import { AdminOnly, useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Badge, Button, Card, ErrorBanner, Field, Input } from "@/components/ui/primitives";
@@ -10,6 +10,24 @@ import { PageHeader, Table, THead } from "@/features/shared/common";
 import { CLUSTERS, CLUSTER_NICHES, DEFAULT_ANCHOR_BANDS, DEFAULT_SETTINGS } from "@server/services/constants";
 
 const CATS = ["Domain", "Niche", "Quality", "Link", "Reuse"];
+
+/** Click the number to change a client's recurring monthly target. Enter or clicking away saves, Escape cancels. */
+function TargetCell({ client, onSaved, onError }: { client: any; onSaved: () => void; onError: (m: string) => void }) {
+  const { isAdmin } = useAuth();
+  const [editing, setEditing] = useState(false); const [val, setVal] = useState(String(client.defaultMonthlyTarget)); const [busy, setBusy] = useState(false);
+  if (!isAdmin) return <>{client.defaultMonthlyTarget}</>;
+  async function save() {
+    const n = Number(val);
+    if (!Number.isInteger(n) || n < 0) { onError("Monthly target must be a whole number, 0 or more."); setVal(String(client.defaultMonthlyTarget)); setEditing(false); return; }
+    if (n === client.defaultMonthlyTarget) { setEditing(false); return; }
+    setBusy(true);
+    try { await put(`/clients/${client.id}`, { defaultMonthlyTarget: n }); onSaved(); } catch (e: any) { onError(e.message); setVal(String(client.defaultMonthlyTarget)); }
+    finally { setBusy(false); setEditing(false); }
+  }
+  if (!editing) return <button type="button" title="Click to edit" onClick={() => { setVal(String(client.defaultMonthlyTarget)); setEditing(true); }} className="min-w-10 rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-left font-medium hover:border-zinc-500 hover:bg-zinc-50">{client.defaultMonthlyTarget}</button>;
+  return <Input autoFocus type="number" min={0} step={1} disabled={busy} className="h-8 w-20" value={val} onChange={(e) => setVal(e.target.value)} onBlur={save}
+    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setVal(String(client.defaultMonthlyTarget)); setEditing(false); } }} />;
+}
 
 export default function SettingsPage() {
   const { data, error, reload } = useApi("/settings"); const { data: cl, reload: reloadClients } = useApi("/clients");
@@ -48,7 +66,7 @@ export default function SettingsPage() {
             </button>
             {openCluster[c] && <Table><THead cols={["Client", "City / state", "Cash buyer", "Monthly target", "GBP", ""]} /><tbody>
               {clients.filter((x) => x.cluster === c).map((x) => { const g = [x.gbpName, x.gbpAddress, x.gbpPhone].filter(Boolean).length; return (
-                <tr key={x.id}><td><div className="font-medium">{x.name}</div><div className="text-xs text-zinc-500">{x.domain} · {x.slug}</div></td><td>{x.city}{x.state && `, ${x.state}`}</td><td>{x.isCashBuyer ? "Yes" : "No"}</td><td>{x.defaultMonthlyTarget}</td>
+                <tr key={x.id}><td><div className="font-medium">{x.name}</div><div className="text-xs text-zinc-500">{x.domain} · {x.slug}</div></td><td>{x.city}{x.state && `, ${x.state}`}</td><td>{x.isCashBuyer ? "Yes" : "No"}</td><td><TargetCell client={x} onSaved={() => { setMsg(`Monthly target for ${x.name} saved.`); reloadClients(); }} onError={(m) => setErr(m)} /></td>
                   <td><Badge tone={g === 3 ? "green" : "amber"}>GBP {g}/3</Badge></td><td><RowMenu items={[{ label: "Edit", onSelect: () => setEdit({ c: x }) }, { label: "Delete", danger: true, onSelect: () => setDelT(x) }]} /></td></tr>); })}
             </tbody></Table>}
           </div>
