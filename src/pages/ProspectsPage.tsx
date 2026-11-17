@@ -3,6 +3,7 @@ import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input, Select, Tex
 import { Dialog } from "@/components/ui/overlays";
 import { del, post, put, useApi } from "@/lib/api";
 import { fmtDate } from "@/lib/utils";
+import { OutreachDialog, CreateLinkDialog } from "@/features/prospects/OutreachDialogs";
 import { FilterBar, PageHeader, Panel, Pager, RefreshButton, Sub, Table, TableSkeleton, THead, usePaged } from "@/features/shared/common";
 
 const labelTone = (l: string) => (l === "Relevant" ? "blue" : l === "Partly" ? "amber" : "red");
@@ -14,6 +15,7 @@ export default function ProspectsPage() {
   const [clientId, setClientId] = useState(""); const [limit, setLimit] = useState(10); const [perQuery, setPerQuery] = useState(5); const [seeds, setSeeds] = useState("");
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
   const [f, setF] = useState({ q: "", client: "", status: "", min: "" });
+  const [outreach, setOutreach] = useState<any | null>(null); const [linkFor, setLinkFor] = useState<any | null>(null);
   const [manual, setManual] = useState(false); const [m, setM] = useState({ clientId: "", domain: "", pageTitle: "", snippet: "" });
   const clients: any[] = cl?.rows ?? []; const ai = data?.ai;
   const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.domain} ${r.pageTitle}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.client || String(r.clientId) === f.client) && (!f.status || r.status === f.status) && (!f.min || r.score >= Number(f.min)));
@@ -27,7 +29,7 @@ export default function ProspectsPage() {
   const act = async (fn: () => Promise<any>, ok?: string) => { try { const r = await fn(); if (ok) setMsg(ok); reload(); return r; } catch (e: any) { setErr(e.message); } };
   return (
     <>
-      <PageHeader title="Prospects" description="AI-assisted discovery of guest-post donors, scored for relevance." actions={<><RefreshButton onClick={reload} loading={loading} /><Button onClick={() => setManual(true)}>Add prospect</Button></>} />
+      <PageHeader title="Prospects" description="Sites worth contacting: track who you reached out to, when to follow up, and turn a win into a link." actions={<><RefreshButton onClick={reload} loading={loading} /><Button onClick={() => setManual(true)}>Add prospect</Button></>} />
       <div className="mb-4 flex items-center gap-2 text-xs text-zinc-600">
         <Badge tone={ai?.configured ? "green" : "amber"}>{ai?.configured ? "AI ready" : "AI not configured"}</Badge>
         <span>Model {ai?.model} · web search {ai?.webSearch ? "enabled" : "off"} · {ai?.provider}</span>
@@ -53,16 +55,25 @@ export default function ProspectsPage() {
           <Select className="w-32" value={f.min} onChange={(v) => setF({ ...f, min: v })} placeholder="Min score" options={[40, 60, 70, 80].map((n) => ({ value: n, label: `${n}+` }))} />
         </FilterBar>
         {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No prospects yet" hint="Pick a client above and run discovery, or add one manually." /> : (
-          <Table><THead cols={["Score", "Prospect", "Status", ""]} />
+          <Table><THead cols={["Score", "Prospect", "Outreach", "Status", ""]} />
             <tbody>{pg.slice.map((r) => (
               <tr key={r.id}>
                 <td><div className="text-lg font-semibold">{r.score}</div><Badge tone={labelTone(r.label) as any}>{r.label}</Badge></td>
                 <td className="max-w-xl"><div className="font-medium">{r.domain} <span className="font-normal text-zinc-500">· {r.client?.name}</span></div>
                   <div className="text-sm">{r.pageTitle}</div><Sub>{r.snippet}</Sub>
                   <Sub>{r.whyItScored} · {fmtDate(r.discoveredAt)} · <Badge>{r.scoreSource === "ai" ? "AI score" : "heuristic score"}</Badge>{r.matchedKeyword && ` · kw: ${r.matchedKeyword}`}{r.sourceQuery && ` · via ${r.sourceQuery}`}</Sub></td>
+                <td className="min-w-44 text-sm">
+                  {r.contactName || r.contactEmail ? <div>{r.contactName}<Sub>{r.contactEmail}</Sub></div> : <span className="text-zinc-400">No contact yet</span>}
+                  {r.owner && <Sub>Owner: {r.owner}</Sub>}
+                  {r.lastContactedAt && <Sub>Contacted {fmtDate(r.lastContactedAt)}</Sub>}
+                  {r.followUpAt && r.status !== "Won" && r.status !== "Rejected" && (new Date(r.followUpAt) <= new Date() ? <Badge tone="red">Follow up due</Badge> : <Sub>Follow up {fmtDate(r.followUpAt)}</Sub>)}
+                  {r.linkId && <Badge tone="green">Link created</Badge>}
+                </td>
                 <td><Select className="h-8 w-32" value={r.status} onChange={(v) => act(() => put(`/prospects/${r.id}`, { status: v }))} options={STATUSES.map((s) => ({ value: s, label: s }))} /></td>
                 <td className="whitespace-nowrap"><div className="flex gap-1">
                   <Button size="sm" variant="ghost" asChild><a href={r.pageUrl ?? `https://${r.domain}`} target="_blank" rel="noreferrer">Open</a></Button>
+                  <Button size="sm" variant="outline" onClick={() => setOutreach(r)}>Outreach</Button>
+                  {!r.linkId && <Button size="sm" variant="outline" onClick={() => setLinkFor(r)}>Create link</Button>}
                   <Button size="sm" variant="outline" onClick={() => act(() => put(`/prospects/${r.id}`, { status: "Shortlisted" }))}>Shortlist</Button>
                   <Button size="sm" onClick={() => act(() => post(`/prospects/${r.id}/promote`), `${r.domain} added as donor — run Sync from Ahrefs on Donors to fill metrics.`)}>Add as donor</Button>
                   <Button size="sm" variant="ghost" onClick={() => act(() => del(`/prospects/${r.id}`))}>✕</Button></div></td>
@@ -71,6 +82,8 @@ export default function ProspectsPage() {
         )}
         <Pager p={pg} />
       </Panel>
+      <OutreachDialog prospect={outreach} onClose={() => setOutreach(null)} onSaved={() => { setMsg("Outreach saved."); reload(); }} />
+      <CreateLinkDialog prospect={linkFor} client={clients.find((c) => c.id === linkFor?.clientId) ?? null} onClose={() => setLinkFor(null)} onCreated={reload} />
       <Dialog open={manual} onOpenChange={setManual} title="Add prospect" description="Scored with the heuristic scorer (keyword hits, guest-post signals, TLD, location).">
         <div className="space-y-3">
           <Field label="Client *"><Select value={m.clientId} onChange={(v) => setM({ ...m, clientId: v })} placeholder="Select client" options={clients.map((c) => ({ value: c.id, label: c.name }))} /></Field>

@@ -203,7 +203,7 @@ core.put("/target-pages/:id", wrap(async (req) => {
 core.delete("/target-pages/:id", wrap(async (req) => { (await db.delete(s.targetPages).where(eq(s.targetPages.id, idOf(req)))); return { ok: true }; }));
 
 /* ---------------- links ---------------- */
-const linkBody = z.object({
+export const linkBody = z.object({
   clientId: z.number().int(), targetPageId: z.number().int().nullish(), donorId: z.number().int().nullish(), donorDomain: z.string().nullish(),
   sourceUrl: z.string().url(), targetUrl: z.string().url(), anchorText: z.string().default(""),
   anchorType: z.enum(ANCHOR_TYPES).default("Natural"), placement: z.enum(PLACEMENTS).default("Unknown"),
@@ -247,7 +247,7 @@ core.get("/links/:id", wrap(async (req) => {
   if (!l) throw new HttpError(404, "Link not found");
   return { ...l, checkRuns: (await db.select().from(s.checkRuns).where(eq(s.checkRuns.linkId, l.id)).orderBy(desc(s.checkRuns.ranAt))) };
 }));
-async function createLink(b: z.infer<typeof linkBody>, userId?: number) {
+export async function createLink(b: z.infer<typeof linkBody>, userId?: number) {
   const donorId = await resolveDonor(b, b.clientId);
   const placedAt = b.placedAt ? new Date(b.placedAt) : null;
   const { autoVerify, donorDomain, donorId: _d, ...rest } = b;

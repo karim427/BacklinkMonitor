@@ -132,6 +132,10 @@ export const prospects = pgTable("prospects", {
   whyItScored: text("why_it_scored"), matchedKeyword: text("matched_keyword"), sourceQuery: text("source_query"),
   scoreSource: text("score_source").notNull().default("heuristic"),
   status: text("status").notNull().default("New"),
+  // outreach tracking
+  contactName: text("contact_name"), contactEmail: text("contact_email"), owner: text("owner"), notes: text("notes"),
+  lastContactedAt: ts("last_contacted_at"), followUpAt: ts("follow_up_at"),
+  linkId: integer("link_id").references(() => links.id, { onDelete: "set null" }),
   discoveredAt: ts("discovered_at").notNull().$defaultFn(() => new Date()),
 });
 

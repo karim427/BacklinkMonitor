@@ -9,7 +9,7 @@ import { getAhrefsKey } from "../services/secrets.js";
 import { syncDonor, syncMany } from "../services/donorMetrics.js";
 import { toDonorMetrics, hostOf } from "../services/linkService.js";
 import { aiConfigured, aiStatus, chat, extractJson } from "../services/ai.js";
-import { HttpError, loadLinks, wrap } from "./core.js";
+import { HttpError, createLink, linkBody, loadLinks, wrap } from "./core.js";
 import { given } from "../util.js";
 
 export const extra = Router();
@@ -89,15 +89,43 @@ extra.get("/prospects", wrap(async () => {
     ai: aiStatus(), suggestedKeywords: CLUSTER_SEED_KEYWORDS,
   };
 }));
-const prospectBody = z.object({ clientId: z.number().int(), domain: z.string().min(3), pageTitle: z.string().nullish(), pageUrl: z.string().nullish(), snippet: z.string().nullish(), status: z.enum(["New", "Shortlisted", "Contacted", "Won", "Rejected"]).optional() });
+const prospectBody = z.object({ clientId: z.number().int(), domain: z.string().min(3), pageTitle: z.string().nullish(), pageUrl: z.string().nullish(), snippet: z.string().nullish(), status: z.enum(["New", "Shortlisted", "Contacted", "Won", "Rejected"]).optional(),
+  contactName: z.string().trim().nullish(), contactEmail: z.string().trim().email().or(z.literal("")).nullish(), owner: z.string().trim().nullish(), notes: z.string().nullish(),
+  lastContactedAt: z.string().nullish(), followUpAt: z.string().nullish() });
 extra.post("/prospects", wrap(async (req, res) => {
   const b = prospectBody.parse(req.body);
   const c = (await db.select().from(s.clients).where(eq(s.clients.id, b.clientId)))[0];
   const h = heuristicScore({ domain: b.domain, title: b.pageTitle ?? "", snippet: b.snippet ?? "" }, (c?.cluster ?? CLUSTERS[0]) as Cluster, c?.city);
   res.status(201);
-  return (await db.insert(s.prospects).values({ ...b, score: h.score, label: h.label, whyItScored: h.why, scoreSource: "heuristic" }).returning())[0];
+  const { lastContactedAt, followUpAt, ...rest } = b;
+  return (await db.insert(s.prospects).values({ ...rest, lastContactedAt: lastContactedAt ? new Date(lastContactedAt) : null, followUpAt: followUpAt ? new Date(followUpAt) : null, score: h.score, label: h.label, whyItScored: h.why, scoreSource: "heuristic" }).returning())[0];
 }));
-extra.put("/prospects/:id", wrap(async (req) => (await db.update(s.prospects).set(given(prospectBody.partial().parse(req.body), req.body)).where(eq(s.prospects.id, idOf(req.params.id))).returning())[0]));
+extra.put("/prospects/:id", wrap(async (req) => {
+  const id = idOf(req.params.id);
+  const b = given(prospectBody.partial().parse(req.body), req.body) as Record<string, any>;
+  for (const k of ["lastContactedAt", "followUpAt"]) if (k in b) b[k] = b[k] ? new Date(b[k]) : null;
+  for (const k of ["contactName", "contactEmail", "owner", "notes"]) if (k in b && !b[k]) b[k] = null;
+  if (b.status === "Contacted") { // marking contacted starts the clock: last contacted now, follow up in a week
+    const cur = (await db.select().from(s.prospects).where(eq(s.prospects.id, id)))[0];
+    if (cur && !("lastContactedAt" in b)) b.lastContactedAt = new Date();
+    if (cur && !("followUpAt" in b) && !cur.followUpAt) b.followUpAt = new Date(Date.now() + 7 * 86_400_000);
+  }
+  return (await db.update(s.prospects).set(b).where(eq(s.prospects.id, id)).returning())[0];
+}));
+/** Turn a prospect into a Pending link for its client, so nobody retypes it. */
+extra.post("/prospects/:id/to-link", wrap(async (req, res) => {
+  const id = idOf(req.params.id);
+  const body = z.object({ targetUrl: z.string().url(), targetPageId: z.number().int().nullish(), sourceUrl: z.string().url().optional(), anchorText: z.string().default(""), reviewer: z.string().nullish() }).parse(req.body);
+  const p = (await db.select().from(s.prospects).where(eq(s.prospects.id, id)))[0];
+  if (!p) throw new HttpError(404, "Prospect not found");
+  if (p.linkId) throw new HttpError(409, "This prospect already has a link");
+  const link = await createLink(linkBody.parse({
+    clientId: p.clientId, targetPageId: body.targetPageId ?? null, sourceUrl: body.sourceUrl ?? p.pageUrl ?? `https://${p.domain}/`, targetUrl: body.targetUrl,
+    anchorText: body.anchorText, donorDomain: p.domain, reviewer: body.reviewer ?? p.owner ?? null, action: "PENDING", autoVerify: false,
+  }), req.user?.id);
+  await db.update(s.prospects).set({ status: "Won", linkId: (link as any).id }).where(eq(s.prospects.id, id));
+  res.status(201); return link;
+}));
 extra.delete("/prospects/:id", wrap(async (req) => { (await db.delete(s.prospects).where(eq(s.prospects.id, idOf(req.params.id)))); return { ok: true }; }));
 
 extra.post("/prospects/discover", wrap(async (req) => {
