@@ -3,6 +3,7 @@ import { db, schema as s } from "../db/index.js";
 import { CLUSTERS, DEFAULT_SETTINGS, type AppSettings, type Cluster } from "./constants.js";
 import { applyRecheck, evaluateRejectRules, fixWindowEnd, scheduleFirstCheck, verdictFor, type DonorMetrics, type LinkFacts } from "./rules.js";
 import { verifyLink } from "./verifier.js";
+import { ensureFreshMetrics } from "./donorMetrics.js";
 
 export async function getSettings(): Promise<AppSettings> {
   const row = (await db.select().from(s.settings).where(eq(s.settings.key, "app")))[0];
@@ -39,7 +40,7 @@ export async function contextFacts(link: typeof s.links.$inferSelect, client: ty
 export async function runVerification(linkId: number, fetchImpl?: typeof fetch) {
   const link = (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0];
   if (!link) throw new Error("Link not found");
-  const donor = (await db.select().from(s.donors).where(eq(s.donors.id, link.donorId)))[0]!;
+  const donor = await ensureFreshMetrics((await db.select().from(s.donors).where(eq(s.donors.id, link.donorId)))[0]!);
   const client = (await db.select().from(s.clients).where(eq(s.clients.id, link.clientId)))[0]!;
   const settings = await getSettings();
   (await db.update(s.links).set({ verificationStatus: "Checking" }).where(eq(s.links.id, linkId)));

@@ -2,8 +2,9 @@ import { AdminOnly } from "@/lib/auth";
 import { useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner } from "@/components/ui/primitives";
 import { post, useApi } from "@/lib/api";
-import { fmtDate } from "@/lib/utils";
-import { DueText, PageHeader, Panel, RefreshButton, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, Pager, usePaged } from "@/features/shared/common";
+import { currentMonth, fmtDate } from "@/lib/utils";
+import { ClientChecks } from "@/features/rechecks/ClientChecks";
+import { DueText, MonthPicker, PageHeader, Panel, RefreshButton, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, Pager, usePaged } from "@/features/shared/common";
 import { cn } from "@/lib/utils";
 
 const TABS = ["due", "overdue", "d30", "d90", "all"] as const;
@@ -11,6 +12,7 @@ const LABEL: Record<string, string> = { due: "Due", overdue: "Overdue", d30: "30
 
 export default function RechecksPage() {
   const { data, error, loading, reload } = useApi("/rechecks");
+  const [view, setView] = useState<"client" | "queue">("client"); const [month, setMonth] = useState(currentMonth()); const [ran, setRan] = useState(0);
   const [tab, setTab] = useState<(typeof TABS)[number]>("due"); const [domain, setDomain] = useState("");
   const [busy, setBusy] = useState<number | "all" | null>(null); const [err, setErr] = useState<string | null>(null);
   const rows: any[] = (data?.rows ?? []).filter((l: any) => {
@@ -18,11 +20,17 @@ export default function RechecksPage() {
     return (tab === "all" || (tab === "due" && due) || (tab === "overdue" && l.due.overdue) || (tab === "d30" && l.nextCheckKind === "30-day") || (tab === "d90" && l.nextCheckKind === "90-day")) && (!domain || l.donor?.domain === domain);
   });
   const pg = usePaged(rows, [tab, domain]);
-  async function run(id?: number) { setBusy(id ?? "all"); setErr(null); try { id ? await post(`/links/${id}/verify`) : await post("/rechecks/run-due"); reload(); } catch (e: any) { setErr(e.message); } finally { setBusy(null); } }
+  async function run(id?: number) { setBusy(id ?? "all"); setErr(null); try { id ? await post(`/links/${id}/verify`) : await post("/rechecks/run-due"); reload(); setRan((n) => n + 1); } catch (e: any) { setErr(e.message); } finally { setBusy(null); } }
   return (
     <>
-      <PageHeader title="Rechecks" description="First recheck 30 days after placement, then every 90 days." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button disabled={busy === "all"} onClick={() => run()}>{busy === "all" ? "Running…" : "Run all due"}</Button></AdminOnly></>} />
+      <PageHeader title="Rechecks" description="Monthly results by client: indexed, spam and lost links. First recheck 30 days after placement, then every 90 days." actions={<>{view === "client" && <MonthPicker month={month} onChange={setMonth} />}<RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button disabled={busy === "all"} onClick={() => run()}>{busy === "all" ? "Running…" : "Run all due"}</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
+      <div className="mb-4 inline-flex rounded-lg border border-zinc-200 p-0.5 text-sm">
+        {([["client", "By client"], ["queue", "Due queue"]] as const).map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)} className={cn("rounded-md px-3 py-1.5", view === v ? "bg-black text-white" : "text-zinc-600 hover:bg-zinc-50")}>{label}</button>))}
+      </div>
+      {view === "client" && <ClientChecks month={month} onChanged={ran} />}
+      {view === "queue" && <>
       {!!data?.domains.length && (
         <div className="mb-4 flex flex-wrap items-center gap-2"><span className="text-sm text-zinc-500">Domains to recheck:</span>
           {data.domains.map((d: any) => <button key={d.domain} onClick={() => setDomain(domain === d.domain ? "" : d.domain)} className={cn("rounded-full border px-3 py-1 text-xs", domain === d.domain ? "border-black bg-black text-white" : "border-zinc-200 hover:bg-zinc-50")}>{d.domain} · {d.count}</button>)}
@@ -53,6 +61,7 @@ export default function RechecksPage() {
         )}
         <Pager p={pg} />
       </Panel>
+      </>}
     </>
   );
 }

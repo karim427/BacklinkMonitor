@@ -67,6 +67,8 @@ export const REJECT_RULES: RejectRule[] = [
 export const DONOR_METRICS_MISSING: RejectRule = { code: "donor_metrics_missing", category: "Quality", label: "Donor metrics not loaded yet (add the Ahrefs key and sync, or enter them on the Donors page)", fixable: true };
 export const RULE_BY_CODE: Record<string, RejectRule> = Object.fromEntries([...REJECT_RULES, DONOR_METRICS_MISSING].map((r) => [r.code, r]));
 
+/** Reject codes that mean "spammy / low-quality site" (used for the monthly spam count on Rechecks). */
+export const SPAM_CODES = ["domain_spam_tld", "niche_vertical", "quality_pbn", "quality_hacked", "quality_thin_ai", "quality_expired", "domain_disavowed", "link_50_outbound"];
 export const SPAM_TLDS = [".shop", ".xyz", ".top", ".click", ".online", ".site"];
 export const NON_US_TLDS = [".uk", ".ca", ".au", ".in"];
 export const BANNED_VERTICALS = ["casino", "gambling", "cbd", "adult", "pharma", "payday", "crypto", "forex"];

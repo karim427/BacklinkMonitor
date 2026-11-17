@@ -1,15 +1,16 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
 import {
-  ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
+  ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, SPAM_CODES, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
 } from "../services/constants.js";
 import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules.js";
 import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
 import { aiStatus } from "../services/ai.js";
 import { ahrefsStatus, checkAhrefsKey, getAhrefsKey, setAhrefsKey } from "../services/secrets.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
+import { syncMany } from "../services/donorMetrics.js";
 
 export const core = Router();
 
@@ -297,6 +298,40 @@ core.post("/links/import", wrap(async (req) => {
 }));
 
 /* ---------------- rechecks ---------------- */
+/** Per-client check results for one month: links confirmed indexed, spam links picked up, and links lost. */
+core.get("/rechecks/summary", wrap(async (req) => {
+  const month = monthParam(req);
+  const start = new Date(`${month}-01T00:00:00Z`); const end = new Date(`${addMonths(month, 1)}-01T00:00:00Z`);
+  const [links, runs, clients] = await Promise.all([
+    loadLinks(),
+    db.select().from(s.checkRuns).where(and(gte(s.checkRuns.ranAt, start), lt(s.checkRuns.ranAt, end))).orderBy(desc(s.checkRuns.ranAt)),
+    db.select().from(s.clients).orderBy(s.clients.name),
+  ]);
+  const latest = new Map<number, (typeof runs)[number]>(); const checked = new Set<number>();
+  for (const r of runs) { checked.add(r.linkId); if (!latest.has(r.linkId) && r.result !== "error") latest.set(r.linkId, r); }
+  const inMonth = (d: Date | null | undefined) => !!d && d >= start && d < end;
+  const spamOf = (l: (typeof links)[number]) => (l.rejectReasons ?? []).filter((c) => SPAM_CODES.includes(c));
+  const rows = clients.map((c) => {
+    const mine = links.filter((l) => l.clientId === c.id);
+    const detail = mine.map((l) => {
+      const run = latest.get(l.id);
+      const added = l.month === month; const lost = l.stage === "Lost" && inMonth(l.lastCheckedAt);
+      const indexed = run && run.linkFound !== false ? (run.indexed ?? null) : null;
+      const spam = added ? spamOf(l) : [];
+      return { id: l.id, sourceUrl: l.sourceUrl, donor: l.donor?.domain ?? null, anchorText: l.anchorText, verdict: l.verdict, stage: l.stage, addedBy: l.reviewer, placedAt: l.placedAt,
+        added, checked: checked.has(l.id), indexed, spam, lost, lostAt: lost ? l.lastCheckedAt : null, due: !!l.nextCheckAt && l.stage !== "Lost" && l.nextCheckAt <= new Date() };
+    }).filter((d) => d.added || d.checked || d.lost);
+    return {
+      clientId: c.id, name: c.name, domain: c.domain, cluster: c.cluster,
+      added: detail.filter((d) => d.added).length, checked: detail.filter((d) => d.checked).length,
+      indexed: detail.filter((d) => d.indexed === true).length, notIndexed: detail.filter((d) => d.indexed === false).length,
+      spam: detail.filter((d) => d.spam.length).length, lost: detail.filter((d) => d.lost).length, due: detail.filter((d) => d.due).length,
+      links: detail,
+    };
+  }).filter((r) => r.links.length > 0);
+  const sum = (k: "added" | "checked" | "indexed" | "notIndexed" | "spam" | "lost" | "due") => rows.reduce((a, r) => a + r[k], 0);
+  return { month, rows, totals: { added: sum("added"), checked: sum("checked"), indexed: sum("indexed"), notIndexed: sum("notIndexed"), spam: sum("spam"), lost: sum("lost"), due: sum("due") } };
+}));
 core.get("/rechecks", wrap(async () => {
   const now = new Date();
   const rows = (await loadLinks()).filter((l) => l.stage !== "Lost" && l.nextCheckAt).sort((a, b) => a.nextCheckAt!.getTime() - b.nextCheckAt!.getTime());
@@ -328,7 +363,12 @@ core.put("/settings/ahrefs-key", wrap(async (req) => {
   const check = await checkAhrefsKey(key);
   if (check === "invalid") throw new HttpError(400, "Ahrefs rejected this key. Check that you copied the whole API key.");
   await setAhrefsKey(key);
-  return { ok: true, verified: check === "valid" };
+  let sync: { synced: number; total: number } | null = null;
+  if (check === "valid") { // look up donors that have no real numbers yet
+    const todo = (await db.select().from(s.donors)).filter((d) => !d.ahrefsSyncedAt).slice(0, 30);
+    if (todo.length) { const r = await syncMany(todo, key); sync = { synced: r.synced, total: r.total }; }
+  }
+  return { ok: true, verified: check === "valid", sync };
 }));
 core.put("/settings", wrap(async (req) => {
   const b = z.object({

@@ -6,6 +6,7 @@ import { BANNED_VERTICALS, CLUSTERS, CLUSTER_SEED_KEYWORDS, NON_US_TLDS, SPAM_TL
 import { checkA, evaluateRejectRules, napMatch } from "../services/rules.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { getAhrefsKey } from "../services/secrets.js";
+import { syncMany } from "../services/donorMetrics.js";
 import { toDonorMetrics, hostOf } from "../services/linkService.js";
 import { aiConfigured, aiStatus, chat, extractJson } from "../services/ai.js";
 import { HttpError, loadLinks, wrap } from "./core.js";
@@ -48,17 +49,9 @@ extra.post("/donors", wrap(async (req, res) => { res.status(201); return (await 
 extra.put("/donors/:id", wrap(async (req) => (await db.update(s.donors).set(donorBody.partial().parse(req.body)).where(eq(s.donors.id, idOf(req.params.id))).returning())[0]));
 extra.delete("/donors/:id", wrap(async (req) => { (await db.delete(s.donors).where(eq(s.donors.id, idOf(req.params.id)))); return { ok: true }; }));
 extra.post("/donors/sync-ahrefs", wrap(async () => {
-  const donors = (await db.select().from(s.donors));
-  let synced = 0; const errors: string[] = []; let mock = false;
-  for (const d of donors) {
-    try {
-      const m = await fetchDonorMetrics(d.domain, (await getAhrefsKey()) ?? ""); mock = m.mock;
-      const hist = [...(d.trafficHistory ?? []), m.organicTraffic].slice(-6);
-      (await db.update(s.donors).set({ dr: m.dr, usTrafficPct: m.usTrafficPct, organicTraffic: m.organicTraffic, referringDomains: m.referringDomains, linkedDomains: m.linkedDomains, trafficHistory: hist, ahrefsSyncedAt: new Date() }).where(eq(s.donors.id, d.id)));
-      synced++;
-    } catch (e) { errors.push(`${d.domain}: ${(e as Error).message}`); }
-  }
-  return { synced, total: donors.length, errors, mock };
+  const key = await getAhrefsKey();
+  if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings first; we don't make up traffic numbers.");
+  return { ...(await syncMany(await db.select().from(s.donors), key)), mock: false };
 }));
 
 /* ---------------- citations ---------------- */

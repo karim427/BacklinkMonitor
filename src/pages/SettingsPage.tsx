@@ -23,7 +23,7 @@ export default function SettingsPage() {
     setErr(null); setMsg(null); setAhBusy(true);
     try {
       const r = await put("/settings/ahrefs-key", { key: remove ? null : ahKey });
-      setMsg(remove ? "Ahrefs key removed. Donor metrics will use mock data." : r.verified ? "Ahrefs key saved and verified." : "Ahrefs key saved, but it could not be verified right now.");
+      setMsg(remove ? "Ahrefs key removed. New donors will show \"metrics not loaded\"." : r.verified ? `Ahrefs key saved and verified.${r.sync ? ` Looked up traffic for ${r.sync.synced} of ${r.sync.total} donors.` : ""}` : "Ahrefs key saved, but it could not be verified right now.");
       setAhKey(""); reload();
     } catch (e: any) { setErr(e.message); } finally { setAhBusy(false); }
   }
@@ -57,7 +57,7 @@ export default function SettingsPage() {
 
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Card className="p-5"><h2 className="mb-3 text-sm font-semibold">Ahrefs API</h2>
-          <div className="space-y-1.5 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Status</span><Badge tone={ah?.credentialLoaded ? "green" : "amber"}>{ah?.credentialLoaded ? "Connected" : "No key — using mock data"}</Badge></div>
+          <div className="space-y-1.5 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Status</span><Badge tone={ah?.credentialLoaded ? "green" : "amber"}>{ah?.credentialLoaded ? "Connected" : "No key: donor traffic is not checked"}</Badge></div>
             <div className="flex justify-between"><span className="text-zinc-500">API key</span><span>{ah?.credentialLoaded ? `•••• ${ah.last4} (${ah.source === "settings" ? "saved here" : "server setting"})` : "Not set"}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Donors synced</span><span>{ah?.donorsSynced} / {ah?.donorsTotal}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Last sync</span><span>{fmtDate(ah?.lastSync)}</span></div></div>
