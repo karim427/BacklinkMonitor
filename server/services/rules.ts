@@ -70,6 +70,7 @@ export interface LinkFacts {
   // from verifier (undefined = unknown / not checked yet)
   linkFound?: boolean; rel?: string[]; placement?: string; outboundLinks?: number; targetMatched?: boolean;
   indexed?: boolean; competitorLinked?: boolean; temporary?: boolean;
+  canonicalElsewhere?: boolean; pageNofollow?: boolean; sponsoredLabel?: boolean; pageUnrelated?: boolean;
   // contextual
   donor: DonorMetrics; clientCluster: Cluster; sourceUrl: string;
   clientId?: number;
@@ -120,6 +121,10 @@ export function evaluateRejectRules(f: LinkFacts): string[] {
   add(f.competingCashClientSamePageOrCity, "link_competing_cash_clients");
   add(f.linkFound === true && f.targetMatched === false, "link_wrong_target");
   add(f.temporary, "link_temporary");
+  add(f.pageNofollow, "link_page_nofollow");
+  add(f.sponsoredLabel, "link_sponsored_label");
+  add(f.canonicalElsewhere, "quality_canonical_elsewhere");
+  add(f.pageUnrelated, "niche_unrelated");
 
   add(f.reusedSameClient6mo, "reuse_same_client_6mo");
   add((f.donorLinksToClients ?? 0) > 3, "reuse_more_than_3_clients");

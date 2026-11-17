@@ -37,7 +37,7 @@ export type Placement = (typeof PLACEMENTS)[number];
 export type RuleCategory = "Domain" | "Niche" | "Quality" | "Link" | "Reuse";
 export interface RejectRule { code: string; category: RuleCategory; label: string; fixable?: boolean }
 
-/** The 26-rule reject list. `fixable` rules produce "Partly relevant" + fix window instead of a hard reject. */
+/** The reject list (26 original rules plus page-level checks). `fixable` rules produce "Partly relevant" + fix window instead of a hard reject. */
 export const REJECT_RULES: RejectRule[] = [
   { code: "domain_spam_tld", category: "Domain", label: "Spam TLD (.shop .xyz .top .click .online .site)" },
   { code: "domain_non_us", category: "Domain", label: "Non-US TLD (.uk .ca .au .in)" },
@@ -63,6 +63,9 @@ export const REJECT_RULES: RejectRule[] = [
   { code: "link_competing_cash_clients", category: "Link", label: "Two competing cash-buyer clients on the same page or city" },
   { code: "link_wrong_target", category: "Link", label: "Link points to the wrong target / redirect", fixable: true },
   { code: "link_temporary", category: "Link", label: "Temporary link" },
+  { code: "link_page_nofollow", category: "Link", label: "The whole page is set to nofollow", fixable: true },
+  { code: "link_sponsored_label", category: "Link", label: "Page is labelled sponsored / advertorial", fixable: true },
+  { code: "quality_canonical_elsewhere", category: "Quality", label: "Page's canonical tag points to a different URL", fixable: true },
   { code: "reuse_same_client_6mo", category: "Reuse", label: "Donor reused for the same client within 6 months" },
   { code: "reuse_more_than_3_clients", category: "Reuse", label: "Donor already links to more than 3 of our clients" },
 ];
@@ -94,6 +97,8 @@ export const DEFAULT_SETTINGS = {
   defaultMonthlyTarget: 4,
   /** Look up new donors on Ahrefs automatically. Off by default: each lookup costs Ahrefs API units. */
   ahrefsAutoLookup: false,
+  /** Ask the AI whether each live link's page is on topic for the client (needs the AI key; costs a little per check). */
+  aiPageRelevance: true,
   anchorBands: DEFAULT_ANCHOR_BANDS,
 };
 export type AppSettings = typeof DEFAULT_SETTINGS;

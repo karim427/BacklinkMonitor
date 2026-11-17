@@ -373,7 +373,7 @@ core.put("/settings/ahrefs-key", wrap(async (req) => {
 core.put("/settings", wrap(async (req) => {
   const b = z.object({
     verifierUserAgent: z.string().min(1), firstRecheckDays: z.number().int().min(1), nextRecheckDays: z.number().int().min(1),
-    fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0), ahrefsAutoLookup: z.boolean(),
+    fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0), ahrefsAutoLookup: z.boolean(), aiPageRelevance: z.boolean(),
     anchorBands: z.object({ Branded: bandSchema, Partial: bandSchema, Natural: bandSchema, Exact: bandSchema }),
   }).partial().parse(req.body);
   if (b.anchorBands) { const err = validateBands(b.anchorBands as AnchorBands); if (err) throw new HttpError(400, err); }

@@ -16,6 +16,15 @@ describe("verifier", () => {
     const r = parseHtml(page('<footer><a href="https://client.com/page">f</a></footer><a href="https://rival.com">r</a>', '<meta name="robots" content="noindex">'), input);
     expect(r).toMatchObject({ placement: "Footer", competitorLinked: true, indexed: false, outboundLinks: 2 });
   });
+  it("detects canonical pointing elsewhere, page-level nofollow and a sponsored label", () => {
+    const head = '<link rel="canonical" href="https://donor.com/other-page"><meta name="robots" content="index, nofollow">';
+    const r = parseHtml(page('<article><p>Sponsored post</p><a href="https://client.com/page">x</a></article>', head), input);
+    expect(r).toMatchObject({ canonicalElsewhere: true, pageNofollow: true, sponsoredLabel: true });
+  });
+  it("is clean when the canonical is the page itself and there is no disclosure", () => {
+    const r = parseHtml(page('<article><p>A normal guide about apps.</p><a href="https://client.com/page">x</a></article>', '<link rel="canonical" href="https://www.donor.com/post/">'), input);
+    expect(r).toMatchObject({ canonicalElsewhere: false, pageNofollow: false, sponsoredLabel: false });
+  });
   it("reports link missing", () => expect(parseHtml(page("<p>nothing</p>"), input).linkFound).toBe(false));
   it("treats fetch failure as error, not relevance failure", async () => {
     const r = await verifyLink(input, (async () => new Response("no", { status: 404 })) as any);

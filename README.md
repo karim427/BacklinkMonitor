@@ -1,6 +1,6 @@
 # Backlink Verify
 
-Internal backlink QA & link-building tracker. Every backlink is checked against Stage 1 page approval, Checks A–C and a 26-rule reject list; only **Relevant** links count toward the monthly target, and links are re-verified at 30 days then every 90.
+Internal backlink QA & link-building tracker. Every backlink is checked against Stage 1 page approval, Checks A–C and the reject list (26 rules plus page checks: canonical, page-level nofollow, sponsored label, and an optional AI on-topic check); only **Relevant** links count toward the monthly target, and links are re-verified at 30 days then every 90.
 
 ## Local setup
 

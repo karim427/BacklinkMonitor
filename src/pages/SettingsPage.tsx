@@ -95,6 +95,8 @@ export default function SettingsPage() {
             <div className="col-span-2"><Field label="Verifier user agent"><Input value={s.verifierUserAgent} onChange={(e) => setS({ ...s, verifierUserAgent: e.target.value })} /></Field></div>
             {([["firstRecheckDays", "First recheck (days)"], ["nextRecheckDays", "Then every (days)"], ["fixWindowDays", "Fix window (days)"], ["defaultMonthlyTarget", "Default monthly target"]] as const).map(([k, l]) => <Field key={k} label={l}><Input type="number" min={1} value={s[k]} onChange={(e) => setS({ ...s, [k]: Number(e.target.value) })} /></Field>)}
           </div>
+          <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={!!s.aiPageRelevance} onChange={async (e) => { const v = e.target.checked; setS({ ...s, aiPageRelevance: v }); await save({ aiPageRelevance: v }, "Page relevance setting"); }} />
+            <span>Check that each live link's page is on topic (AI)<span className="block text-xs text-zinc-500">Reads the page and rejects it as "Unrelated niche" if it clearly isn't about the client's topic. Uses a little of your AI key per check.</span></span></label>
           <Button className="mt-4" onClick={() => save({ verifierUserAgent: s.verifierUserAgent, firstRecheckDays: s.firstRecheckDays, nextRecheckDays: s.nextRecheckDays, fixWindowDays: s.fixWindowDays, defaultMonthlyTarget: s.defaultMonthlyTarget }, "Verification defaults")}>Save</Button></Card>
       </div>
 

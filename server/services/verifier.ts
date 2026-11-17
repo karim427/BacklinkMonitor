@@ -6,6 +6,7 @@ export interface VerifyOutput {
   linkFound?: boolean; rel?: string[]; anchorFound?: string; targetMatched?: boolean;
   placement?: "Body" | "Footer" | "Sidebar" | "Author bio" | "Unknown"; outboundLinks?: number;
   competitorLinked?: boolean; indexed?: boolean;
+  canonicalElsewhere?: boolean; pageNofollow?: boolean; sponsoredLabel?: boolean; pageTitle?: string; pageText?: string;
 }
 
 const norm = (u: string) => { try { const x = new URL(u); return (x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/+$/, "") + x.search).toLowerCase(); } catch { return u.toLowerCase(); } };
@@ -25,15 +26,27 @@ export function parseHtml(html: string, input: VerifyInput): Omit<VerifyOutput, 
   const exact = toClientDomain.find((a) => norm(a.href) === norm(input.targetUrl));
   const hit = exact ?? toClientDomain[0];
   const robots = ($('meta[name="robots"]').attr("content") ?? "").toLowerCase();
+  // The canonical tag says which URL gets the credit. If it points at a different page, a link on this one is worth little.
+  const canonRaw = $('link[rel="canonical"]').attr("href");
+  let canonicalElsewhere = false;
+  if (canonRaw) { try { const c = new URL(canonRaw, input.sourceUrl); const u = new URL(input.sourceUrl); canonicalElsewhere = c.hostname.replace(/^www\./, "") !== u.hostname.replace(/^www\./, "") || c.pathname.replace(/\/+$/, "") !== u.pathname.replace(/\/+$/, ""); } catch { /* ignore */ } }
   const out: Omit<VerifyOutput, "ok" | "httpStatus"> = {
     linkFound: !!hit, outboundLinks: outbound.length, indexed: !robots.includes("noindex"),
     competitorLinked: (input.competitorDomains ?? []).some((c) => outbound.some((a) => a.host === c.toLowerCase())),
+    canonicalElsewhere, pageNofollow: /\b(nofollow|none)\b/.test(robots), pageTitle: ($("title").first().text() || "").trim().slice(0, 200),
   };
+  const main = $("article, main, [role=main]").first(); const textRoot = (main.length ? main : $("body")).clone(); textRoot.find("script,style,nav,footer,aside,header").remove(); textRoot.find("*").each((_, e) => { $(e).append(" "); }); // keep words from neighbouring tags apart
+  const bodyText = textRoot.text().replace(/\s+/g, " ").trim();
+  out.pageText = bodyText.slice(0, 2500);
   if (hit) {
     const $a = $(hit.el);
     out.rel = ($a.attr("rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
     out.anchorFound = $a.text().trim().slice(0, 200);
     out.targetMatched = !!exact;
+    // "Sponsored post" style disclosures near the top of the article or right around the link.
+    const SPONSORED = /\b(sponsored (post|content|article)|advertorial|advertisement|paid (post|partnership|promotion)|partner content|promoted (post|content)|this (post|article) (is|was) sponsored)\b/i;
+    const at = bodyText.indexOf(out.anchorFound ?? "\u0000");
+    out.sponsoredLabel = SPONSORED.test(bodyText.slice(0, 700)) || (at >= 0 && SPONSORED.test(bodyText.slice(Math.max(0, at - 300), at + 300))) || SPONSORED.test($('meta[name="description"]').attr("content") ?? "");
     const ancestors = $a.parents().toArray().map((p) => `${p.tagName} ${$(p).attr("class") ?? ""} ${$(p).attr("id") ?? ""}`.toLowerCase()).join(" | ");
     out.placement = /\bfooter\b/.test(ancestors) ? "Footer"
       : /sidebar|widget|aside/.test(ancestors) ? "Sidebar"

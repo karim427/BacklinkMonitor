@@ -32,7 +32,7 @@ describe("verdict when the donor has no numbers", () => {
 });
 
 describe("reject list", () => {
-  it("has 26 rules", () => expect(REJECT_RULES).toHaveLength(26));
+  it("has 26 original rules plus 3 page-level rules", () => expect(REJECT_RULES).toHaveLength(29));
   it("clean link has no rejects", () => expect(evaluateRejectRules(base())).toEqual([]));
   const cases: [string, Partial<LinkFacts>, Partial<DonorMetrics>?][] = [
     ["domain_spam_tld", { sourceUrl: "https://x.xyz/p" }],
@@ -49,6 +49,10 @@ describe("reject list", () => {
     ["quality_expired", {}, { flags: { expired: true } }],
     ["quality_pbn", {}, { flags: { pbn: true } }],
     ["quality_not_indexed", { indexed: false }],
+    ["link_page_nofollow", { pageNofollow: true }],
+    ["link_sponsored_label", { sponsoredLabel: true }],
+    ["quality_canonical_elsewhere", { canonicalElsewhere: true }],
+    ["niche_unrelated", { pageUnrelated: true }],
     ["quality_hacked", {}, { flags: { hacked: true } }],
     ["quality_thin_ai", {}, { flags: { thinAi: true } }],
     ["link_nofollow_paid", { rel: ["nofollow"] }],
