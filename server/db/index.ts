@@ -21,7 +21,12 @@ const migrationsFolder = path.resolve(process.cwd(), "server/db/migrations");
 let _db: PgDatabase<PgQueryResultHKT, typeof schema>;
 let _migrate: () => Promise<void>;
 if (url) {
-  const client = postgres(url, { prepare: false, max: process.env.VERCEL ? 1 : 5, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : "require" });
+  const client = postgres(url, {
+    prepare: false, max: process.env.VERCEL ? 3 : 5,
+    // Serverless: sockets that sit idle get silently dropped, and the next query on a dead socket hangs until the function times out.
+    // Close idle connections quickly and fail fast instead of hanging.
+    idle_timeout: process.env.VERCEL ? 4 : 0, connect_timeout: 10, max_lifetime: process.env.VERCEL ? 300 : null,
+    ssl: /localhost|127\.0\.0\.1/.test(url) ? false : "require" });
   _db = drizzlePg(client, { schema }) as any;
   _migrate = () => migratePg(_db as any, { migrationsFolder });
 } else {

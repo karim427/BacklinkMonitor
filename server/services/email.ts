@@ -11,6 +11,7 @@ export async function sendEmail(to: string, subject: string, text: string, html?
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+    signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({ from: process.env.EMAIL_FROM ?? "Backlink Verify <onboarding@resend.dev>", to: [to], subject, text, html }),
   });
   if (!r.ok) throw new Error(`Email provider error ${r.status}: ${(await r.text()).slice(0, 200)}`);
