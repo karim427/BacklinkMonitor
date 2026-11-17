@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/overlays";
 import { Button, ErrorBanner, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { get, post, put } from "@/lib/api";
-import { toDateInput } from "@/lib/utils";
+import { toDateInput, todayLocal } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import { ANCHOR_TYPES, PLACEMENTS } from "@server/services/constants";
 
 const empty = { clientId: "", targetPageId: "", donorId: "", donorDomain: "", sourceUrl: "", targetUrl: "", anchorText: "", anchorType: "Natural", placement: "Unknown", reviewer: "", placedAt: "", notes: "", autoVerify: true };
@@ -10,14 +11,15 @@ const empty = { clientId: "", targetPageId: "", donorId: "", donorDomain: "", so
 export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; link?: any | null; onSaved: () => void }) {
   const [f, setF] = useState<any>(empty);
   const [clients, setClients] = useState<any[]>([]); const [pages, setPages] = useState<any[]>([]); const [donors, setDonors] = useState<any[]>([]);
+  const [people, setPeople] = useState<any[]>([]); const { user } = useAuth();
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
 
   useEffect(() => {
     if (!open) return;
     setErr(null);
-    Promise.all([get("/clients"), get("/target-pages"), get("/donors")]).then(([c, t, d]) => { setClients(c.rows); setPages(t.rows); setDonors(d.rows); }).catch((e) => setErr(e.message));
-    setF(link ? { ...empty, ...link, clientId: String(link.clientId), targetPageId: link.targetPageId ? String(link.targetPageId) : "", donorId: String(link.donorId), placedAt: toDateInput(link.placedAt), reviewer: link.reviewer ?? "", notes: link.notes ?? "", autoVerify: false } : empty);
+    Promise.all([get("/clients"), get("/target-pages"), get("/donors"), get("/people")]).then(([c, t, d, p]) => { setClients(c.rows); setPages(t.rows); setDonors(d.rows); setPeople(p.rows); }).catch((e) => setErr(e.message));
+    setF(link ? { ...empty, ...link, clientId: String(link.clientId), targetPageId: link.targetPageId ? String(link.targetPageId) : "", donorId: String(link.donorId), placedAt: toDateInput(link.placedAt), reviewer: link.reviewer ?? "", notes: link.notes ?? "", autoVerify: false } : { ...empty, reviewer: user?.name || user?.email?.split("@")[0] || "" });
   }, [open, link]);
 
   async function submit(e: React.FormEvent) {
@@ -47,16 +49,16 @@ export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolea
           <Field label="Anchor text"><Input value={f.anchorText} onChange={(e) => set("anchorText", e.target.value)} /></Field>
           <Field label="Anchor type"><Select value={f.anchorType} onChange={(v) => set("anchorType", v)} options={ANCHOR_TYPES.map((a) => ({ value: a, label: a }))} /></Field>
           <Field label="Placement"><Select value={f.placement} onChange={(v) => set("placement", v)} options={PLACEMENTS.map((a) => ({ value: a, label: a }))} /></Field>
-          <Field label="Reviewer / builder"><Input value={f.reviewer} onChange={(e) => set("reviewer", e.target.value)} /></Field>
+          <Field label="Name"><Select value={f.reviewer} onChange={(v) => set("reviewer", v)} placeholder="Select a person" options={[...people.map((p) => ({ value: p.name, label: p.name })), ...(f.reviewer && !people.some((p) => p.name === f.reviewer) ? [{ value: f.reviewer, label: f.reviewer }] : [])]} /></Field>
           <div className="sm:col-span-2"><Field label="Placed at" hint="Setting a date moves the link to Placed and schedules rechecks.">
-            <div className="flex gap-2"><Input type="date" value={f.placedAt} onChange={(e) => set("placedAt", e.target.value)} />
-              <Button type="button" variant="outline" onClick={() => set("placedAt", toDateInput(new Date()))}>Today</Button></div></Field></div>
+            <div className="flex gap-2"><Input type="date" max={todayLocal()} value={f.placedAt} onChange={(e) => set("placedAt", e.target.value)} />
+              <Button type="button" variant="outline" onClick={() => set("placedAt", todayLocal())}>Today</Button></div></Field></div>
         </div>
         <Field label="Notes"><Textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.autoVerify} onChange={(e) => set("autoVerify", e.target.checked)} />Check relevance automatically after saving</label>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={busy || !f.clientId}>{busy ? "Saving…" : link ? "Save changes" : "Add link"}</Button>
+          <Button disabled={busy || !f.clientId || (!!f.placedAt && f.placedAt > todayLocal())}>{busy ? "Saving…" : link ? "Save changes" : "Add link"}</Button>
         </div>
       </form>
     </Dialog>

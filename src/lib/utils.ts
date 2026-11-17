@@ -6,6 +6,8 @@ export const cn = (...i: ClassValue[]) => twMerge(clsx(i));
 export const fmtNum = (n: number | null | undefined) => (n ?? 0).toLocaleString("en-US");
 export const fmtDate = (d: string | number | Date | null | undefined) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+/** Today as YYYY-MM-DD in the browser's own timezone (used as the max for "placed at"). */
+export const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 export const toDateInput = (d?: string | number | Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 export const monthLabel = (m: string) => {
   const [y, mo] = m.split("-").map(Number);

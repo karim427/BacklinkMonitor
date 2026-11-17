@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
 import {
   ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
@@ -26,15 +26,19 @@ const addMonths = (m: string, n: number) => { const [y, mo] = m.split("-").map(N
 
 /* ---------------- enrichment ---------------- */
 export async function loadLinks() {
-  const [rows, clientRows, donorRows, pageRows] = await Promise.all([
+  const [rows, clientRows, donorRows, pageRows, errRuns] = await Promise.all([
     db.select().from(s.links).orderBy(desc(s.links.placedAt)), db.select().from(s.clients), db.select().from(s.donors), db.select().from(s.targetPages),
+    db.select({ linkId: s.checkRuns.linkId, error: s.checkRuns.error }).from(s.checkRuns).where(isNotNull(s.checkRuns.error)).orderBy(desc(s.checkRuns.ranAt)).limit(300),
   ]);
+  const lastError = new Map<number, string>();
+  for (const r of errRuns) if (r.error && !lastError.has(r.linkId)) lastError.set(r.linkId, r.error);
   const cl = new Map(clientRows.map((c) => [c.id, c]));
   const dn = new Map(donorRows.map((d) => [d.id, d]));
   const tp = new Map(pageRows.map((t) => [t.id, t]));
   const now = new Date();
   return rows.map((l) => ({
     ...l,
+    lastError: l.verificationStatus === "Error" ? lastError.get(l.id) ?? null : null,
     month: linkMonth({ verdict: l.verdict as any, placedAt: l.placedAt, createdAt: l.createdAt }),
     client: cl.get(l.clientId) ?? null, donor: dn.get(l.donorId) ?? null, targetPage: l.targetPageId ? tp.get(l.targetPageId) ?? null : null,
     due: dueLabel(l.nextCheckAt, now),
@@ -197,7 +201,9 @@ const linkBody = z.object({
   clientId: z.number().int(), targetPageId: z.number().int().nullish(), donorId: z.number().int().nullish(), donorDomain: z.string().nullish(),
   sourceUrl: z.string().url(), targetUrl: z.string().url(), anchorText: z.string().default(""),
   anchorType: z.enum(ANCHOR_TYPES).default("Natural"), placement: z.enum(PLACEMENTS).default("Unknown"),
-  reviewer: z.string().nullish(), placedAt: z.string().nullish(), notes: z.string().nullish(),
+  reviewer: z.string().nullish(), notes: z.string().nullish(),
+  // A link can't have been placed in the future (14h slack covers every timezone).
+  placedAt: z.string().nullish().refine((v) => !v || new Date(v).getTime() <= Date.now() + 14 * 3_600_000, "Placed date can't be in the future"),
   verdict: z.enum(VERDICTS).optional(), stage: z.enum(STAGES).optional(), action: z.enum(LINK_ACTIONS).optional(),
   autoVerify: z.boolean().default(false),
 });

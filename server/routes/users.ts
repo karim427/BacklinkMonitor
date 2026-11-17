@@ -66,6 +66,12 @@ auth.post("/auth/verify-code", wrap(async (req) => {
   return { token: signSession(user.id), user: pub(user) };
 }));
 
+/** Names for the "Name" dropdown on links. Open to any signed-in user (the gate only restricts /users*). */
+users.get("/people", wrap(async () => {
+  const rows = await db.select().from(s.users).where(eq(s.users.active, true)).orderBy(s.users.createdAt);
+  return { rows: rows.map((u) => ({ id: u.id, email: u.email, name: u.name || u.email.split("@")[0] })) };
+}));
+
 /* ---------- admin: user management ---------- */
 const idOf = (p: string) => { const n = Number(p); if (!Number.isInteger(n)) throw new HttpError(400, "Invalid id"); return n; };
 const activeAdmins = async () => (await db.select().from(s.users).where(and(eq(s.users.role, "admin"), eq(s.users.active, true)))).length;

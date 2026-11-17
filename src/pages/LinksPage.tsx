@@ -81,7 +81,7 @@ export default function LinksPage() {
                   <td><div>{l.anchorText || "—"}</div><Sub>{l.anchorType}</Sub></td>
                   <td><VerdictBadge v={l.verdict} />{!!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[16rem] space-y-0.5"><Sub>{ruleLabel(l.rejectReasons[0])}</Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
                   <td><StageBadge v={l.stage} /></td>
-                  <td><VerifBadge v={l.verificationStatus} /><div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
+                  <td><VerifBadge v={l.verificationStatus} />{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
                   <td className="whitespace-nowrap text-zinc-600">{fmtDate(l.lastCheckedAt)}</td>
                   <td><div className="flex items-center gap-1">
                     <Button size="sm" variant="outline" disabled={busyId === l.id} onClick={() => verify(l.id)}>{busyId === l.id ? "Checking…" : "Verify now"}</Button>

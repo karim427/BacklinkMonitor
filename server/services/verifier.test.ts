@@ -19,8 +19,8 @@ describe("verifier", () => {
   it("reports link missing", () => expect(parseHtml(page("<p>nothing</p>"), input).linkFound).toBe(false));
   it("treats fetch failure as error, not relevance failure", async () => {
     const r = await verifyLink(input, (async () => new Response("no", { status: 404 })) as any);
-    expect(r.ok).toBe(false); expect(r.error).toMatch(/not a relevance failure/);
+    expect(r.ok).toBe(false); expect(r.error).toMatch(/404.*not found/);
     const r2 = await verifyLink(input, (async () => { throw new Error("ENOTFOUND"); }) as any);
-    expect(r2.ok).toBe(false);
+    expect(r2.ok).toBe(false); expect(r2.error).toMatch(/not found/i);
   });
 });
