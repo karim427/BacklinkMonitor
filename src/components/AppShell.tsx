@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BookUser, Building2, FileCheck2, Gauge, Globe2, Link2, ListChecks, Menu, MapPin, Megaphone, Plus, RefreshCcw, Search, Settings, Users, LogOut, X } from "lucide-react";
 import { Badge, Button } from "./ui/primitives";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { prefetch } from "@/lib/api";
+import { currentMonth } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: Gauge, end: true },
@@ -23,6 +25,12 @@ const NAV = [
 export function AppShell() {
   const [open, setOpen] = useState(false);
   const loc = useLocation(); const nav = useNavigate(); const { user, logout, isAdmin } = useAuth();
+  // Warm the main pages right after sign-in so clicking around is instant.
+  useEffect(() => {
+    const m = currentMonth();
+    const t = setTimeout(() => ["/clients?month=" + m, "/links", "/target-pages", "/rechecks"].forEach(prefetch), 150);
+    return () => clearTimeout(t);
+  }, []);
   const items = NAV.filter((n) => isAdmin || !("admin" in n && n.admin));
   const current = items.find((n) => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)))?.label ?? "Not found";
   return (

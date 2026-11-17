@@ -1,22 +1,22 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Route, Routes, Link } from "react-router-dom";
 import "./index.css";
 import { AppShell } from "./components/AppShell";
 import { EmptyState, Button } from "./components/ui/primitives";
-import DashboardPage from "./pages/DashboardPage";
-import ClientsPage from "./pages/ClientsPage";
-import ClientTrackingPage from "./pages/ClientTrackingPage";
-import TargetLinksPage from "./pages/TargetLinksPage";
-import LinksPage from "./pages/LinksPage";
-import TargetPagesPage from "./pages/TargetPagesPage";
-import DonorsPage from "./pages/DonorsPage";
-import CitationsPage from "./pages/CitationsPage";
-import RechecksPage from "./pages/RechecksPage";
-import ProspectsPage from "./pages/ProspectsPage";
-import HaroPage from "./pages/HaroPage";
-import SettingsPage from "./pages/SettingsPage";
-import UsersPage from "./pages/UsersPage";
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const ClientsPage = lazy(() => import("./pages/ClientsPage"));
+const ClientTrackingPage = lazy(() => import("./pages/ClientTrackingPage"));
+const TargetLinksPage = lazy(() => import("./pages/TargetLinksPage"));
+const LinksPage = lazy(() => import("./pages/LinksPage"));
+const TargetPagesPage = lazy(() => import("./pages/TargetPagesPage"));
+const DonorsPage = lazy(() => import("./pages/DonorsPage"));
+const CitationsPage = lazy(() => import("./pages/CitationsPage"));
+const RechecksPage = lazy(() => import("./pages/RechecksPage"));
+const ProspectsPage = lazy(() => import("./pages/ProspectsPage"));
+const HaroPage = lazy(() => import("./pages/HaroPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const UsersPage = lazy(() => import("./pages/UsersPage"));
 import { AuthGate } from "./components/AuthGate";
 
 const NotFound = () => <EmptyState title="Page not found" hint="That page doesn't exist." action={<Button asChild><Link to="/">Back to dashboard</Link></Button>} />;
@@ -24,7 +24,7 @@ const NotFound = () => <EmptyState title="Page not found" hint="That page doesn'
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AuthGate><BrowserRouter>
-      <Routes>
+      <Suspense fallback={null}><Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="clients" element={<ClientsPage />} />
@@ -42,7 +42,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="users" element={<UsersPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
-      </Routes>
+      </Routes></Suspense>
     </BrowserRouter></AuthGate>
   </React.StrictMode>,
 );
