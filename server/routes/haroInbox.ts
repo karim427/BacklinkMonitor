@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { emailText, getInboxToken, importHaro, regenerateInboxToken, tokenOk } from "../services/haroImport.js";
+import { getInboxToken, importHaro, regenerateInboxToken, tokenOk } from "../services/haroImport.js";
+import { readInboundMail } from "../services/inboundMail.js";
 import { HttpError, wrap } from "./core.js";
 
 export const haroInbox = Router();
@@ -28,9 +29,7 @@ haroInbox.post("/haro/inbound/:token", wrap(async (req) => {
   const now = Date.now(); hits = hits.filter((t) => now - t < 3_600_000);
   if (hits.length >= 60) throw new HttpError(429, "Too many emails this hour");
   hits.push(now);
-  const b = (req.body ?? {}) as Record<string, any>;
-  const text = emailText({ text: b.text ?? b.plain ?? b["body-plain"] ?? b.TextBody, html: b.html ?? b["body-html"] ?? b.HtmlBody, body: b.body });
-  const subject = String(b.subject ?? b.Subject ?? "");
+  const { subject, text } = readInboundMail((req.body ?? {}) as Record<string, any>);
   if (text.length < 20) throw new HttpError(400, "The email had no readable text");
   return importHaro(subject ? `${subject}\n\n${text}` : text);
 }));
