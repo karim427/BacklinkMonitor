@@ -17,13 +17,17 @@ export const CLUSTER_SEED_KEYWORDS: Record<Cluster, string[]> = {
   "Cash home buyers": ['real estate investing blog "write for us"', 'home selling tips "guest post"', 'foreclosure probate blog "contribute"'],
 };
 
-export const VERDICTS = ["Relevant", "Partly relevant", "Not relevant"] as const;
+/** "Not judged": we can't decide yet (the donor has no DR/traffic numbers), so the link is neither accepted nor rejected. */
+export const VERDICTS = ["Relevant", "Partly relevant", "Not relevant", "Not judged"] as const;
 export type Verdict = (typeof VERDICTS)[number];
 export const STAGES = ["Intake", "Placed", "Indexed", "Confirmed", "Lost"] as const;
 export type Stage = (typeof STAGES)[number];
 export const VERIFICATION_STATUSES = ["Unverified", "Queued", "Checking", "Verified", "Error"] as const;
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
-export const LINK_ACTIONS = ["LIVE", "REPLACE", "LOST"] as const;
+/** Where a link is in its life: Pending (planned) -> In process (placed, waiting to appear) -> Live (found on the page). After Live it is judged: Live stays Live if relevant, Replace if not, Lost if it disappears. Rejected is set by hand (the placement was turned down or dropped): never checked or rechecked. */
+export const LINK_ACTIONS = ["PENDING", "IN_PROCESS", "LIVE", "REPLACE", "LOST", "REJECTED"] as const;
+/** Links that are not live yet are never judged for relevance. */
+export const PRE_LIVE: readonly string[] = ["PENDING", "IN_PROCESS"];
 export type LinkAction = (typeof LINK_ACTIONS)[number];
 export const ANCHOR_TYPES = ["Branded", "Partial", "Natural", "Exact", "Other"] as const;
 export type AnchorType = (typeof ANCHOR_TYPES)[number];
@@ -64,7 +68,7 @@ export const REJECT_RULES: RejectRule[] = [
 ];
 
 /** Not one of the 26 reject rules: a data gap flag. Treated as fixable so the link stays "Partly relevant" until metrics are loaded. */
-export const DONOR_METRICS_MISSING: RejectRule = { code: "donor_metrics_missing", category: "Quality", label: "Donor metrics not loaded yet (add the Ahrefs key and sync, or enter them on the Donors page)", fixable: true };
+export const DONOR_METRICS_MISSING: RejectRule = { code: "donor_metrics_missing", category: "Quality", label: "Not judged yet: this donor has no DR or traffic numbers. Enter them on the Donors page (Edit) or use Look up.", fixable: true };
 export const RULE_BY_CODE: Record<string, RejectRule> = Object.fromEntries([...REJECT_RULES, DONOR_METRICS_MISSING].map((r) => [r.code, r]));
 
 /** Reject codes that mean "spammy / low-quality site" (used for the monthly spam count on Rechecks). */

@@ -17,7 +17,7 @@ export const linkMonth = (l: CountableLink) => monthKey(l.placedAt ?? l.createdA
 export function targetProgress(links: CountableLink[], month: string, target: number) {
   const inMonth = links.filter((l) => linkMonth(l) === month);
   const relevant = inMonth.filter((l) => l.verdict === "Relevant").length;
-  const pending = inMonth.filter((l) => l.verdict === "Partly relevant").length;
+  const pending = inMonth.filter((l) => l.verdict === "Partly relevant" || l.verdict === "Not judged").length;
   const rejected = inMonth.filter((l) => l.verdict === "Not relevant").length;
   return { received: inMonth.length, relevant, pending, rejected, remaining: Math.max(0, target - relevant), target };
 }
@@ -131,6 +131,8 @@ export function verdictFor(rejects: string[], opts: { fixWindowEndsAt?: Date | n
   const fixable = rejects.filter((c) => RULE_BY_CODE[c]?.fixable);
   const hard = rejects.filter((c) => !RULE_BY_CODE[c]?.fixable);
   if (hard.length) return { verdict: "Not relevant", fixable, hard };
+  // Without the donor's DR/traffic we can't decide, so don't accept or reject: wait for the numbers.
+  if (rejects.includes("donor_metrics_missing")) return { verdict: "Not judged", fixable, hard };
   if (fixable.length) {
     const now = opts.now ?? new Date();
     if (opts.fixWindowEndsAt && opts.fixWindowEndsAt.getTime() < now.getTime()) return { verdict: "Not relevant", fixable, hard };
@@ -172,7 +174,7 @@ export function applyRecheck(
   const next = scheduleNextCheck(now, s);
   return {
     stage, verdict: v.verdict,
-    action: (v.verdict === "Relevant" ? "LIVE" : "REPLACE") as "LIVE" | "REPLACE",
+    action: (v.verdict === "Relevant" ? "LIVE" : v.verdict === "Not judged" ? "LIVE" : "REPLACE") as "LIVE" | "REPLACE",
     ...next,
     fixWindowEndsAt: v.verdict === "Partly relevant" ? fixWindowEnd(now, s) : null,
   };

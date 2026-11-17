@@ -15,10 +15,19 @@ describe("donor with no metrics loaded", () => {
   it("is flagged as a data gap, not rejected for 0% US traffic", () => {
     const r = evaluateRejectRules({ ...base(), donor: zero });
     expect(r).toEqual(["donor_metrics_missing"]);
-    expect(verdictFor(r).verdict).toBe("Partly relevant");
+    expect(verdictFor(r).verdict).toBe("Not judged");
   });
   it("still fails on real low US traffic once metrics exist", () => {
     expect(evaluateRejectRules({ ...base(), donor: { ...zero, metricsMissing: false, organicTraffic: 5000, dr: 30, usTrafficPct: 20 } })).toContain("domain_low_us_traffic");
+  });
+});
+
+describe("verdict when the donor has no numbers", () => {
+  it("is Not judged, not Partly relevant or Not relevant", () => expect(verdictFor(["donor_metrics_missing"]).verdict).toBe("Not judged"));
+  it("a hard reject that doesn't need metrics still wins", () => expect(verdictFor(["domain_spam_tld", "donor_metrics_missing"]).verdict).toBe("Not relevant"));
+  it("counts as pending toward the target, not as received-relevant", () => {
+    const p = targetProgress([{ verdict: "Not judged", createdAt: new Date("2026-11-05") }, { verdict: "Relevant", createdAt: new Date("2026-11-06") }], "2026-11", 4);
+    expect(p).toMatchObject({ relevant: 1, pending: 1, remaining: 3 });
   });
 });
 

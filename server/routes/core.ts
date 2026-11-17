@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, desc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
 import {
-  ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, SPAM_CODES, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
+  ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, PRE_LIVE, SPAM_CODES, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
 } from "../services/constants.js";
 import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules.js";
 import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
@@ -227,7 +227,7 @@ core.get("/links", wrap(async () => {
   const all = await loadLinks();
   const count = (v: string) => all.filter((l) => l.verdict === v).length;
   const now = new Date();
-  return { rows: all, totals: { total: all.length, relevant: count("Relevant"), partly: count("Partly relevant"), notRelevant: count("Not relevant"), dueRechecks: all.filter((l) => l.stage !== "Lost" && l.nextCheckAt && l.nextCheckAt <= now).length } };
+  return { rows: all, totals: { total: all.length, relevant: count("Relevant"), partly: count("Partly relevant"), notRelevant: count("Not relevant"), notJudged: count("Not judged"), dueRechecks: all.filter((l) => l.stage !== "Lost" && l.nextCheckAt && l.nextCheckAt <= now).length } };
 }));
 core.get("/links/export", async (req, res, next) => {
   try {
@@ -248,7 +248,9 @@ async function createLink(b: z.infer<typeof linkBody>, userId?: number) {
   const donorId = await resolveDonor(b, b.clientId);
   const placedAt = b.placedAt ? new Date(b.placedAt) : null;
   const { autoVerify, donorDomain, donorId: _d, ...rest } = b;
-  const values = { ...rest, donorId, placedAt, createdBy: userId || null, ...(placedAt ? await scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
+  const action = rest.action ?? (placedAt ? "IN_PROCESS" : "PENDING");
+  const verdict = rest.verdict ?? (action === "REJECTED" ? "Not relevant" : PRE_LIVE.includes(action) ? "Not judged" : undefined); // not judged until it is live
+  const values = { ...rest, action, ...(verdict ? { verdict } : {}), donorId, placedAt, createdBy: userId || null, ...(placedAt ? await scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
   const row = (await db.insert(s.links).values(values).returning())[0];
   if (autoVerify) return runVerification(row.id);
   return row;
@@ -259,6 +261,8 @@ core.put("/links/:id", wrap(async (req) => {
   const { autoVerify, donorDomain, ...rest } = b;
   const patch: Record<string, unknown> = { ...rest };
   if (b.placedAt !== undefined) { const p = b.placedAt ? new Date(b.placedAt) : null; patch.placedAt = p; if (p) Object.assign(patch, await scheduleOnPlace(p)); }
+  if (b.action === "REJECTED") Object.assign(patch, { verdict: "Not relevant", rejectReasons: [], fixWindowEndsAt: null, nextCheckAt: null, nextCheckKind: null }); // dropped by hand: no more checks
+  if (b.action && PRE_LIVE.includes(b.action)) Object.assign(patch, { verdict: "Not judged", rejectReasons: [], fixWindowEndsAt: null }); // not live yet: nothing to judge
   if (!b.donorId && donorDomain) patch.donorId = await resolveDonor({ donorDomain, sourceUrl: b.sourceUrl ?? "" }, b.clientId ?? 0);
   const row = (await db.update(s.links).set(patch).where(eq(s.links.id, id)).returning())[0];
   if (autoVerify) await runVerification(id);

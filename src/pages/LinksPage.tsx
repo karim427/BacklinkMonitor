@@ -5,9 +5,10 @@ import { Button, EmptyState, ErrorBanner, Input, Select } from "@/components/ui/
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
 import { authHeaders, del, post, useApi } from "@/lib/api";
 import { downloadText, fmtDate, ruleLabel } from "@/lib/utils";
-import { Pager, PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, usePaged, ext } from "@/features/shared/common";
+import { Pager, PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, ActionBadge, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, usePaged, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
-import { STAGES, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
+import { StatusSelect } from "@/features/links/StatusSelect";
+import { PRE_LIVE, STAGES, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
 
 export default function LinksPage() {
   const { data, error, loading, reload } = useApi("/links");
@@ -52,11 +53,12 @@ export default function LinksPage() {
         <RefreshButton onClick={reload} loading={loading} />
       </>} />
       {(error || rowErr) && <div className="mb-4"><ErrorBanner message={(error || rowErr)!} onRetry={reload} /></div>}
-      <KpiRow cols={5}>
+      <KpiRow cols={6}>
         <Kpi label="Total" value={t?.total} loading={loading} tone="blue" onClick={() => setF({ ...f, verdict: "", due: false })} active={!f.verdict && !f.due} />
         <Kpi label="Relevant" value={t?.relevant} loading={loading} tone="blue" onClick={() => setF({ ...f, verdict: "Relevant", due: false })} active={f.verdict === "Relevant"} />
         <Kpi label="Partly relevant" value={t?.partly} loading={loading} tone="amber" sub="14-day fix window" onClick={() => setF({ ...f, verdict: "Partly relevant", due: false })} active={f.verdict === "Partly relevant"} />
         <Kpi label="Not relevant" value={t?.notRelevant} loading={loading} tone="red" sub="Replace or drop" onClick={() => setF({ ...f, verdict: "Not relevant", due: false })} active={f.verdict === "Not relevant"} />
+        <Kpi label="Not judged" value={t?.notJudged} loading={loading} tone="blue" sub="Not live yet, or no donor numbers" onClick={() => setF({ ...f, verdict: "Not judged", due: false })} active={f.verdict === "Not judged"} />
         <Kpi label="Due rechecks" value={t?.dueRechecks} loading={loading} tone="red" onClick={() => setF({ ...f, verdict: "", due: true })} active={f.due} />
       </KpiRow>
       <Panel>
@@ -71,7 +73,7 @@ export default function LinksPage() {
         </FilterBar>
         {loading && !data ? <TableSkeleton /> : !filtered.length ? <EmptyState title="No links match" hint={rows.length ? "Try clearing the filters." : "Add your first backlink to start verifying."} /> : (
           <Table>
-            <THead cols={["Client", "Target page", "Donor", "Anchor", "Verdict", "Stage", "Check", "Last checked", ""]} />
+            <THead cols={["Client", "Target page", "Donor", "Anchor", "Verdict", "Status", "Check", "Last checked", ""]} />
             <tbody>
               {pg.slice.map((l) => (
                 <tr key={l.id}>
@@ -79,9 +81,9 @@ export default function LinksPage() {
                   <td className="max-w-56"><div className="truncate">{l.targetPage?.keyword ?? "—"}</div><Sub><span className="block truncate">{l.targetUrl}</span></Sub></td>
                   <td><div>{l.donor?.domain}</div><Sub>{l.donor && !l.donor.ahrefsSyncedAt && !l.donor.dr && !l.donor.organicTraffic ? "Traffic not checked yet" : `DR ${l.donor?.dr} · ${l.donor?.usTrafficPct}% US · ${(l.donor?.organicTraffic ?? 0).toLocaleString("en-US")} visits · ${l.donor?.referringDomains} RDs`}</Sub></td>
                   <td><div>{l.anchorText || "—"}</div><Sub>{l.anchorType}</Sub></td>
-                  <td><VerdictBadge v={l.verdict} />{!!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[16rem] space-y-0.5"><Sub>{ruleLabel(l.rejectReasons[0])}</Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
-                  <td><StageBadge v={l.stage} /></td>
-                  <td><VerifBadge v={l.verificationStatus} />{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
+                  <td>{l.action === "REJECTED" ? <><VerdictBadge v="Not relevant" /><Sub>Rejected by hand</Sub></> : PRE_LIVE.includes(l.action) ? <><span className="text-zinc-400">—</span><Sub>Judged once the link is live</Sub></> : <VerdictBadge v={l.verdict} />}{!!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[16rem] space-y-0.5"><Sub>{ruleLabel(l.rejectReasons[0])}</Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
+                  <td><div className="flex flex-col items-start gap-1"><StatusSelect link={l} onChanged={reload} /><StageBadge v={l.stage} /></div></td>
+                  <td><VerifBadge v={l.verificationStatus} />{PRE_LIVE.includes(l.action) && l.lastCheckedAt && <div className="mt-1 max-w-[14rem] text-xs text-zinc-500">Checked: the link isn't on the page yet</div>}{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
                   <td className="whitespace-nowrap text-zinc-600">{fmtDate(l.lastCheckedAt)}</td>
                   <td><div className="flex items-center gap-1">
                     <Button size="sm" variant="outline" disabled={busyId === l.id} onClick={() => verify(l.id)}>{busyId === l.id ? "Checking…" : "Verify now"}</Button>

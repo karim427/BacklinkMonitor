@@ -6,7 +6,7 @@ import { toDateInput, todayLocal } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { ANCHOR_TYPES, PLACEMENTS } from "@server/services/constants";
 
-const empty = { clientId: "", targetPageId: "", donorId: "", donorDomain: "", sourceUrl: "", targetUrl: "", anchorText: "", anchorType: "Natural", placement: "Unknown", reviewer: "", placedAt: "", notes: "", autoVerify: true };
+const empty = { clientId: "", targetPageId: "", donorId: "", donorDomain: "", sourceUrl: "", targetUrl: "", anchorText: "", anchorType: "Natural", placement: "Unknown", action: "", reviewer: "", placedAt: "", notes: "", autoVerify: true };
 
 export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; link?: any | null; onSaved: () => void }) {
   const [f, setF] = useState<any>(empty);
@@ -27,7 +27,7 @@ export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolea
     const body = {
       clientId: Number(f.clientId), targetPageId: f.targetPageId ? Number(f.targetPageId) : null, donorId: f.donorId ? Number(f.donorId) : null,
       donorDomain: f.donorDomain || null, sourceUrl: f.sourceUrl, targetUrl: f.targetUrl, anchorText: f.anchorText, anchorType: f.anchorType,
-      placement: f.placement, reviewer: f.reviewer || null, placedAt: f.placedAt || null, notes: f.notes || null, autoVerify: f.autoVerify,
+      placement: f.placement, ...(f.action ? { action: f.action } : {}), reviewer: f.reviewer || null, placedAt: f.placedAt || null, notes: f.notes || null, autoVerify: f.autoVerify,
     };
     try { link ? await put(`/links/${link.id}`, body) : await post("/links", body); onSaved(); onOpenChange(false); }
     catch (e: any) { setErr(e.message); } finally { setBusy(false); }
@@ -49,8 +49,10 @@ export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolea
           <Field label="Anchor text"><Input value={f.anchorText} onChange={(e) => set("anchorText", e.target.value)} /></Field>
           <Field label="Anchor type"><Select value={f.anchorType} onChange={(v) => set("anchorType", v)} options={ANCHOR_TYPES.map((a) => ({ value: a, label: a }))} /></Field>
           <Field label="Placement"><Select value={f.placement} onChange={(v) => set("placement", v)} options={PLACEMENTS.map((a) => ({ value: a, label: a }))} /></Field>
+          <Field label="Status" hint="Relevance is only checked once the link is live."><Select value={f.action} onChange={(v) => set("action", v)} placeholder="Automatic (Pending, or In process once placed)"
+            options={[{ value: "PENDING", label: "Pending" }, { value: "IN_PROCESS", label: "In process" }, { value: "LIVE", label: "Live" }, { value: "REJECTED", label: "Rejected" }, ...(["REPLACE", "LOST"].includes(f.action) ? [{ value: f.action, label: f.action === "LOST" ? "Lost" : "Replace" }] : [])]} /></Field>
           <Field label="Name"><Select value={f.reviewer} onChange={(v) => set("reviewer", v)} placeholder="Select a person" options={[...people.map((p) => ({ value: p.name, label: p.name })), ...(f.reviewer && !people.some((p) => p.name === f.reviewer) ? [{ value: f.reviewer, label: f.reviewer }] : [])]} /></Field>
-          <div className="sm:col-span-2"><Field label="Placed at" hint="Setting a date moves the link to Placed and schedules rechecks.">
+          <div className="sm:col-span-3"><Field label="Placed at" hint="Setting a date moves the link to Placed and schedules rechecks.">
             <div className="flex gap-2"><Input type="date" max={todayLocal()} value={f.placedAt} onChange={(e) => set("placedAt", e.target.value)} />
               <Button type="button" variant="outline" onClick={() => set("placedAt", todayLocal())}>Today</Button></div></Field></div>
         </div>

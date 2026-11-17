@@ -1,6 +1,6 @@
 import { and, eq, ne, gte, inArray } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
-import { CLUSTERS, DEFAULT_SETTINGS, type AppSettings, type Cluster } from "./constants.js";
+import { CLUSTERS, DEFAULT_SETTINGS, PRE_LIVE, type AppSettings, type Cluster } from "./constants.js";
 import { applyRecheck, evaluateRejectRules, fixWindowEnd, scheduleFirstCheck, verdictFor, type DonorMetrics, type LinkFacts } from "./rules.js";
 import { verifyLink } from "./verifier.js";
 import { ensureFreshMetrics } from "./donorMetrics.js";
@@ -40,6 +40,7 @@ export async function contextFacts(link: typeof s.links.$inferSelect, client: ty
 export async function runVerification(linkId: number, fetchImpl?: typeof fetch) {
   const link = (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0];
   if (!link) throw new Error("Link not found");
+  if (link.action === "REJECTED") return link; // turned down or dropped by hand: nothing to check
   const donor = await ensureFreshMetrics((await db.select().from(s.donors).where(eq(s.donors.id, link.donorId)))[0]!);
   const client = (await db.select().from(s.clients).where(eq(s.clients.id, link.clientId)))[0]!;
   const settings = await getSettings();
@@ -56,13 +57,21 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
     return (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0]!;
   }
 
+  // Not live yet (Pending / In process): never judge. If the link is on the page now, it goes Live and is judged below; if not, just note that we looked.
+  const preLive = PRE_LIVE.includes(link.action);
+  if (preLive && !v.linkFound) {
+    (await db.insert(s.checkRuns).values({ linkId, ranAt: now, httpStatus: v.httpStatus ?? null, linkFound: false, indexed: v.indexed, outboundLinks: v.outboundLinks, result: "not_live_yet" }));
+    (await db.update(s.links).set({ verificationStatus: "Unverified", lastCheckedAt: now, verdict: "Not judged", rejectReasons: [], fixWindowEndsAt: null }).where(eq(s.links.id, linkId)));
+    return (await db.select().from(s.links).where(eq(s.links.id, linkId)))[0]!;
+  }
+
   const facts: LinkFacts = {
     donor: toDonorMetrics(donor), clientCluster: client.cluster as Cluster, sourceUrl: link.sourceUrl, clientId: client.id,
     linkFound: v.linkFound, rel: v.rel, placement: v.placement, outboundLinks: v.outboundLinks, targetMatched: v.targetMatched,
     indexed: v.indexed, competitorLinked: v.competitorLinked, ...(await contextFacts(link, client)),
   };
   const rejects = v.linkFound ? evaluateRejectRules(facts) : [];
-  const isRecheck = !!link.lastCheckedAt && link.stage !== "Intake";
+  const isRecheck = !preLive && !!link.lastCheckedAt && link.stage !== "Intake";
   const patch: Partial<typeof s.links.$inferInsert> = { verificationStatus: "Verified", lastCheckedAt: now, rejectReasons: rejects };
 
   if (isRecheck && link.nextCheckKind) {
@@ -70,13 +79,15 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
   } else {
     const r = verdictFor(rejects);
     const existingWindow = link.fixWindowEndsAt && link.fixWindowEndsAt > now ? link.fixWindowEndsAt : fixWindowEnd(now, settings);
-    const verdict = !v.linkFound ? "Partly relevant" : verdictFor(rejects, { fixWindowEndsAt: link.fixWindowEndsAt }).verdict;
+    const verdict = !v.linkFound ? (facts.donor.metricsMissing ? "Not judged" : "Partly relevant") : verdictFor(rejects, { fixWindowEndsAt: link.fixWindowEndsAt }).verdict;
     Object.assign(patch, {
-      verdict, action: verdict === "Relevant" ? "LIVE" : "REPLACE",
+      verdict, action: verdict === "Relevant" || verdict === "Not judged" ? "LIVE" : "REPLACE",
       fixWindowEndsAt: verdict === "Partly relevant" ? existingWindow : null,
       stage: link.stage === "Intake" && link.placedAt ? "Placed" : link.stage,
     });
-    if (!v.linkFound) patch.rejectReasons = ["link_wrong_target"];
+    if (preLive) Object.assign(patch, { placedAt: link.placedAt ?? now, stage: "Placed", ...scheduleFirstCheck(link.placedAt ?? now, settings) }); // went live: the 30-day clock starts
+    if (!link.nextCheckAt && !patch.nextCheckAt) Object.assign(patch, scheduleFirstCheck(link.placedAt ?? now, settings)); // e.g. set Live by hand: make sure it still gets rechecked
+    if (!v.linkFound) patch.rejectReasons = facts.donor.metricsMissing ? ["link_wrong_target", "donor_metrics_missing"] : ["link_wrong_target"];
     void r;
   }
   (await db.insert(s.checkRuns).values({
@@ -94,7 +105,8 @@ export async function scheduleOnPlace(placedAt: Date) {
 }
 
 export async function runDueRechecks(now = new Date()) {
-  const due = (await db.select().from(s.links).where(and(ne(s.links.stage, "Lost")))).filter((l) => l.nextCheckAt && l.nextCheckAt <= now);
+  // Due rechecks, plus every "In process" link: it is looked at on each run until it shows up on the page and goes Live.
+  const due = (await db.select().from(s.links).where(and(ne(s.links.stage, "Lost")))).filter((l) => l.action !== "REJECTED" && (l.action === "IN_PROCESS" || (l.nextCheckAt && l.nextCheckAt <= now && !PRE_LIVE.includes(l.action))));
   const out: { id: number; verdict: string; error?: boolean }[] = [];
   // A few at a time: each check can take up to 15s waiting on the donor site, and a serverless run has a hard time limit.
   const BATCH = 4;

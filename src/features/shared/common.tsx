@@ -27,7 +27,7 @@ export function Kpi({ label, value, sub, tone, onClick, active, loading }: {
   );
 }
 export const KpiRow = ({ children, cols = 4 }: { children: React.ReactNode; cols?: number }) => (
-  <div className={cn("mb-6 grid gap-3 grid-cols-2", cols === 5 ? "lg:grid-cols-5" : cols === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4")}>{children}</div>
+  <div className={cn("mb-6 grid gap-3 grid-cols-2", cols === 6 ? "lg:grid-cols-6" : cols === 5 ? "lg:grid-cols-5" : cols === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4")}>{children}</div>
 );
 
 export function MonthPicker({ month, onChange }: { month: string; onChange: (m: string) => void }) {
@@ -44,11 +44,12 @@ export const RefreshButton = ({ onClick, loading }: { onClick: () => void; loadi
 );
 
 /* ---- badges ---- */
-export const verdictTone = (v: string): Tone => (v === "Relevant" ? "blue" : v === "Not relevant" ? "red" : "amber");
-export const VerdictBadge = ({ v }: { v: string }) => <Badge tone={verdictTone(v)}>{v}</Badge>;
+export const verdictTone = (v: string): Tone => (v === "Relevant" ? "blue" : v === "Not relevant" ? "red" : v === "Not judged" ? "neutral" : "amber");
+export const VerdictBadge = ({ v }: { v: string }) => <Badge tone={verdictTone(v)}>{v === "Not judged" ? "Not judged yet" : v}</Badge>;
 export const StageBadge = ({ v }: { v: string }) => <Badge tone={v === "Lost" ? "red" : v === "Confirmed" ? "green" : "neutral"}>{v}</Badge>;
 export const VerifBadge = ({ v }: { v: string }) => <Badge tone={v === "Verified" ? "green" : v === "Error" ? "red" : v === "Unverified" ? "neutral" : "amber"}>{v}</Badge>;
-export const ActionBadge = ({ v }: { v: string }) => <Badge tone={v === "LIVE" ? "green" : v === "LOST" ? "red" : "amber"}>{v}</Badge>;
+const ACTION_LABEL: Record<string, string> = { PENDING: "Pending", IN_PROCESS: "In process", LIVE: "Live", REPLACE: "Replace", LOST: "Lost", REJECTED: "Rejected" };
+export const ActionBadge = ({ v }: { v: string }) => <Badge tone={v === "LIVE" ? "green" : v === "LOST" || v === "REJECTED" ? "red" : v === "PENDING" ? "neutral" : v === "IN_PROCESS" ? "blue" : "amber"}>{ACTION_LABEL[v] ?? v}</Badge>;
 export const DueText = ({ due }: { due?: { label: string; overdue: boolean } | null }) =>
   due ? <span className={cn("text-xs", due.overdue ? "font-medium text-red-600" : "text-zinc-500")}>{due.label}</span> : null;
 

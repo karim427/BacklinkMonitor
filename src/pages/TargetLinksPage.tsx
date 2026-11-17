@@ -5,6 +5,7 @@ import { del, useApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { ConfirmDialog, RowMenu } from "@/components/ui/overlays";
 import { LinkDialog } from "@/features/links/LinkDialog";
+import { StatusSelect } from "@/features/links/StatusSelect";
 import { cn, downloadText, monthLabel } from "@/lib/utils";
 import { ActionBadge, FilterBar, PageHeader, Panel, RefreshButton, Sub, TableSkeleton } from "@/features/shared/common";
 
@@ -42,7 +43,7 @@ export default function TargetLinksPage() {
             <button type="button" aria-expanded={isOpen(g)} onClick={() => setOpenMonths({ ...openMonths, [g]: !isOpen(g) })}
               className={cn("flex w-full items-center gap-2 bg-zinc-50 px-4 py-3 text-left text-sm font-medium hover:bg-zinc-100", isOpen(g) && "border-b border-zinc-200")}>
               <ChevronDown className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", !isOpen(g) && "-rotate-90")} />
-              {monthLabel(g)} <span className="ml-1 font-normal text-zinc-500">{ls.length} links · {ls.filter((l) => l.action === "LIVE").length} live · {ls.filter((l) => l.action === "REPLACE").length} to replace</span>
+              {monthLabel(g)} <span className="ml-1 font-normal text-zinc-500">{ls.length} links · {ls.filter((l) => l.action === "LIVE").length} live · {ls.filter((l) => l.action === "REPLACE").length} to replace{ls.some((l) => l.action === "PENDING" || l.action === "IN_PROCESS") && ` · ${ls.filter((l) => l.action === "PENDING" || l.action === "IN_PROCESS").length} not live yet`}</span>
             </button>
             {isOpen(g) && <><div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm [&_td]:border [&_td]:border-zinc-100 [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-zinc-200 [&_th]:bg-zinc-50 [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-medium [&_th]:text-zinc-500">
@@ -50,7 +51,7 @@ export default function TargetLinksPage() {
                 <tbody>{ls.map((l) => (
                   <tr key={l.id}><td className="max-w-60"><span className="block truncate">{l.sourceUrl}</span></td><td>{l.anchorText}</td>
                     <td className="max-w-60"><Sub>{l.targetPage?.keyword}</Sub><span className="block truncate">{l.targetUrl}</span></td>
-                    <td>{l.donor?.dr}</td><td><ActionBadge v={l.action} /></td><td>{l.reviewer}</td><td>{l.client?.name}</td>
+                    <td>{l.donor?.dr}</td><td><StatusSelect link={l} onChanged={reload} /></td><td>{l.reviewer}</td><td>{l.client?.name}</td>
                     {isAdmin && <td><RowMenu items={[{ label: "Edit link", onSelect: () => setEdit(l) }, { label: "Delete", danger: true, onSelect: () => setDel(l) }]} /></td>}</tr>
                 ))}</tbody>
               </table>
