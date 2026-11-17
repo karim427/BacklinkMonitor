@@ -63,7 +63,7 @@ export default function SettingsPage() {
       <Card className="p-5"><h2 className="mb-1 text-sm font-semibold">Reject list</h2><p className="mb-3 text-xs text-zinc-500">Any one item rejects the link, even if every check above passes.</p>
         <div className="grid gap-4 md:grid-cols-2">{CATS.map((c) => { const rs = (data?.rejectRules ?? []).filter((r: any) => r.category === c); return (
           <div key={c} className="rounded-lg border border-zinc-200 p-3"><div className="mb-2 text-sm font-medium">{c} <Badge>{rs.length}</Badge></div>
-            {rs.map((r: any) => <div key={r.code} className="border-t border-zinc-100 py-1.5 text-sm first:border-0">{r.label}<div className="font-mono text-[11px] text-zinc-400">{r.code}{r.fixable && " · fixable (14-day window)"}</div></div>)}</div>); })}</div></Card>
+            {rs.map((r: any) => <div key={r.code} className="border-t border-zinc-100 py-1.5 text-sm first:border-0">{r.label}{r.fixable && <div className="text-[11px] text-zinc-400">Fixable · 14-day window</div>}</div>)}</div>); })}</div></Card>
 
       <ClientDialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)} client={edit?.c} onSaved={() => { reloadClients(); reload(); }} />
       <ConfirmDialog open={!!delT} onOpenChange={(o) => !o && setDelT(null)} title="Delete client?" description={delT && `${delT.name} and all of its links, target pages and citations will be removed.`} onConfirm={async () => { await del(`/clients/${delT.id}`); reloadClients(); }} />

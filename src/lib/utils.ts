@@ -1,3 +1,4 @@
+import { RULE_BY_CODE } from "@server/services/constants";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 export const cn = (...i: ClassValue[]) => twMerge(clsx(i));
@@ -24,4 +25,12 @@ export const daysUntil = (d: string | number | Date | null | undefined) => {
 export const downloadText = (name: string, text: string, type = "text/csv") => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+};
+
+/** Human-readable reject reason. Never shows a raw code like "link_footer_sidebar_bio". */
+export const ruleLabel = (code: string) => {
+  const r = RULE_BY_CODE[code]?.label;
+  if (r) return r;
+  const t = code.replace(/_/g, " ").trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
 };

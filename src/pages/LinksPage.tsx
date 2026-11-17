@@ -4,7 +4,7 @@ import { Download, Upload } from "lucide-react";
 import { Button, EmptyState, ErrorBanner, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
 import { authHeaders, del, post, useApi } from "@/lib/api";
-import { downloadText, fmtDate } from "@/lib/utils";
+import { downloadText, fmtDate, ruleLabel } from "@/lib/utils";
 import { Pager, PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, usePaged, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
 import { STAGES, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
@@ -79,7 +79,7 @@ export default function LinksPage() {
                   <td className="max-w-56"><div className="truncate">{l.targetPage?.keyword ?? "—"}</div><Sub><span className="block truncate">{l.targetUrl}</span></Sub></td>
                   <td><div>{l.donor?.domain}</div><Sub>DR {l.donor?.dr} · {l.donor?.usTrafficPct}% US · {l.donor?.referringDomains} RDs</Sub></td>
                   <td><div>{l.anchorText || "—"}</div><Sub>{l.anchorType}</Sub></td>
-                  <td><VerdictBadge v={l.verdict} />{!!l.rejectReasons?.length && <Sub>{l.rejectReasons[0]}{l.rejectReasons.length > 1 && ` +${l.rejectReasons.length - 1}`}</Sub>}</td>
+                  <td><VerdictBadge v={l.verdict} />{!!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[16rem] space-y-0.5"><Sub>{ruleLabel(l.rejectReasons[0])}</Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
                   <td><StageBadge v={l.stage} /></td>
                   <td><VerifBadge v={l.verificationStatus} /><div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
                   <td className="whitespace-nowrap text-zinc-600">{fmtDate(l.lastCheckedAt)}</td>
