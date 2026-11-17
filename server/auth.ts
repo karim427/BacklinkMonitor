@@ -52,19 +52,25 @@ const USER_WRITES: { method: string; re: RegExp; ownLink?: boolean }[] = [
   { method: "DELETE", re: /^\/links\/\d+$/, ownLink: true },
 ];
 
-/** Gate every /api route except /auth/* and /cron/* (cron has its own secret). */
+/** Pure permission check used by the gate (and unit-tested). `ownLink` means the caller must have created the link. */
+export function permission(role: Role, method: string, path: string): { allowed: boolean; ownLink?: boolean } {
+  if (role === "admin") return { allowed: true };
+  if (path.startsWith("/users")) return { allowed: false };
+  if (method === "GET" || method === "HEAD") return { allowed: true };
+  const rule = USER_WRITES.find((r) => r.method === method && r.re.test(path));
+  return rule ? { allowed: true, ownLink: !!rule.ownLink } : { allowed: false };
+}
+
+/** Gate every /api route except /auth/*, /cron/* (own secret) and /health. */
 export async function gate(req: Request, res: Response, next: NextFunction) {
   try {
     if (req.path.startsWith("/auth/") || req.path.startsWith("/cron/") || req.path === "/health") return next();
     const user = await resolveUser(req);
     if (!user) return res.status(401).json({ error: { message: "Unauthorized" } });
     req.user = user;
-    if (user.role === "admin") return next();
-    if (req.path.startsWith("/users")) return res.status(403).json({ error: { message: "Admins only" } });
-    if (req.method === "GET" || req.method === "HEAD") return next();
-    const rule = USER_WRITES.find((r) => r.method === req.method && r.re.test(req.path));
-    if (!rule) return res.status(403).json({ error: { message: "Admins only" } });
-    if (rule.ownLink) {
+    const perm = permission(user.role, req.method, req.path);
+    if (!perm.allowed) return res.status(403).json({ error: { message: "Admins only" } });
+    if (perm.ownLink) {
       const id = Number(req.path.split("/")[2]);
       const link = (await db.select({ createdBy: s.links.createdBy }).from(s.links).where(eq(s.links.id, id)))[0];
       if (link && link.createdBy !== user.id) return res.status(403).json({ error: { message: "You can only change links you added" } });
