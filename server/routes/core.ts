@@ -8,9 +8,10 @@ import {
 import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules.js";
 import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
 import { aiStatus } from "../services/ai.js";
+import { given } from "../util.js";
 import { ahrefsStatus, checkAhrefsKey, getAhrefsKey, setAhrefsKey } from "../services/secrets.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
-import { syncMany } from "../services/donorMetrics.js";
+import { autoLookupEnabled } from "../services/donorMetrics.js";
 
 export const core = Router();
 
@@ -134,7 +135,7 @@ core.post("/clients", wrap(async (req, res) => {
   return (await db.insert(s.clients).values({ ...b, slug: slugify(b.name) }).returning())[0];
 }));
 core.put("/clients/:id", wrap(async (req) => {
-  const b = clientBody.partial().parse(req.body);
+  const b = given(clientBody.partial().parse(req.body), req.body);
   return (await db.update(s.clients).set(b).where(eq(s.clients.id, idOf(req))).returning())[0];
 }));
 core.delete("/clients/:id", wrap(async (req) => { (await db.delete(s.clients).where(eq(s.clients.id, idOf(req)))); return { ok: true }; }));
@@ -190,7 +191,7 @@ core.post("/target-pages", wrap(async (req, res) => {
   return (await db.insert(s.targetPages).values({ ...b, linksNeeded: r.linksNeeded, monthsToClose: r.monthsToClose }).returning())[0];
 }));
 core.put("/target-pages/:id", wrap(async (req) => {
-  const b = tpBody.partial().parse(req.body);
+  const b = given(tpBody.partial().parse(req.body), req.body);
   const patch: Record<string, unknown> = { ...b };
   if (b.rdsNeeded !== undefined) { const r = stage1(b.rdsNeeded, b.currentRDs ?? 0); patch.linksNeeded = r.linksNeeded; patch.monthsToClose = r.monthsToClose; }
   if (b.status === "Approved" && !b.approvalMonth) patch.approvalMonth = monthKey(new Date());
@@ -216,8 +217,8 @@ async function resolveDonor(b: { donorId?: number | null; donorDomain?: string |
   if (found) return found.id;
   const client = (await db.select().from(s.clients).where(eq(s.clients.id, clientId)))[0];
   let metrics: Partial<typeof s.donors.$inferInsert> = {};
-  const key = await getAhrefsKey();
-  if (key) { // real numbers only: never invent metrics for a donor we know nothing about
+  const key = (await autoLookupEnabled()) ? await getAhrefsKey() : null;
+  if (key) { // opt-in only (costs Ahrefs units); real numbers only: never invent metrics for a donor we know nothing about
     try { const m = await fetchDonorMetrics(domain, key); metrics = { dr: m.dr, usTrafficPct: m.usTrafficPct, organicTraffic: m.organicTraffic, referringDomains: m.referringDomains, linkedDomains: m.linkedDomains, ahrefsSyncedAt: new Date() }; } catch { /* leave empty: shows as "metrics not loaded" */ }
   }
   return (await db.insert(s.donors).values({ domain, name: domain, cluster: client?.cluster ?? CLUSTERS[0], ...metrics }).returning())[0].id;
@@ -254,7 +255,7 @@ async function createLink(b: z.infer<typeof linkBody>, userId?: number) {
 }
 core.post("/links", wrap(async (req, res) => { res.status(201); return createLink(linkBody.parse(req.body), req.user?.id); }));
 core.put("/links/:id", wrap(async (req) => {
-  const id = idOf(req); const b = linkBody.partial().parse(req.body);
+  const id = idOf(req); const b = given(linkBody.partial().parse(req.body), req.body);
   const { autoVerify, donorDomain, ...rest } = b;
   const patch: Record<string, unknown> = { ...rest };
   if (b.placedAt !== undefined) { const p = b.placedAt ? new Date(b.placedAt) : null; patch.placedAt = p; if (p) Object.assign(patch, await scheduleOnPlace(p)); }
@@ -363,17 +364,12 @@ core.put("/settings/ahrefs-key", wrap(async (req) => {
   const check = await checkAhrefsKey(key);
   if (check === "invalid") throw new HttpError(400, "Ahrefs rejected this key. Check that you copied the whole API key.");
   await setAhrefsKey(key);
-  let sync: { synced: number; total: number } | null = null;
-  if (check === "valid") { // look up donors that have no real numbers yet
-    const todo = (await db.select().from(s.donors)).filter((d) => !d.ahrefsSyncedAt).slice(0, 30);
-    if (todo.length) { const r = await syncMany(todo, key); sync = { synced: r.synced, total: r.total }; }
-  }
-  return { ok: true, verified: check === "valid", sync };
+  return { ok: true, verified: check === "valid" };
 }));
 core.put("/settings", wrap(async (req) => {
   const b = z.object({
     verifierUserAgent: z.string().min(1), firstRecheckDays: z.number().int().min(1), nextRecheckDays: z.number().int().min(1),
-    fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0),
+    fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0), ahrefsAutoLookup: z.boolean(),
     anchorBands: z.object({ Branded: bandSchema, Partial: bandSchema, Natural: bandSchema, Exact: bandSchema }),
   }).partial().parse(req.body);
   if (b.anchorBands) { const err = validateBands(b.anchorBands as AnchorBands); if (err) throw new HttpError(400, err); }

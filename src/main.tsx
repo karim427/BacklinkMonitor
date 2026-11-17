@@ -11,7 +11,6 @@ const TargetLinksPage = lazy(() => import("./pages/TargetLinksPage"));
 const LinksPage = lazy(() => import("./pages/LinksPage"));
 const TargetPagesPage = lazy(() => import("./pages/TargetPagesPage"));
 const DonorsPage = lazy(() => import("./pages/DonorsPage"));
-const CitationsPage = lazy(() => import("./pages/CitationsPage"));
 const RechecksPage = lazy(() => import("./pages/RechecksPage"));
 const ProspectsPage = lazy(() => import("./pages/ProspectsPage"));
 const HaroPage = lazy(() => import("./pages/HaroPage"));
@@ -35,7 +34,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="links" element={<LinksPage />} />
           <Route path="target-pages" element={<TargetPagesPage />} />
           <Route path="donors" element={<DonorsPage />} />
-          <Route path="citations" element={<CitationsPage />} />
           <Route path="rechecks" element={<RechecksPage />} />
           <Route path="prospects" element={<ProspectsPage />} />
           <Route path="haro" element={<HaroPage />} />

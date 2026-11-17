@@ -3,13 +3,14 @@ import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
 import { BANNED_VERTICALS, CLUSTERS, CLUSTER_SEED_KEYWORDS, NON_US_TLDS, SPAM_TLDS, type Cluster } from "../services/constants.js";
-import { checkA, evaluateRejectRules, napMatch } from "../services/rules.js";
+import { checkA, evaluateRejectRules } from "../services/rules.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { getAhrefsKey } from "../services/secrets.js";
-import { syncMany } from "../services/donorMetrics.js";
+import { syncDonor, syncMany } from "../services/donorMetrics.js";
 import { toDonorMetrics, hostOf } from "../services/linkService.js";
 import { aiConfigured, aiStatus, chat, extractJson } from "../services/ai.js";
 import { HttpError, loadLinks, wrap } from "./core.js";
+import { given } from "../util.js";
 
 export const extra = Router();
 const idOf = (p: unknown) => { const n = Number(p); if (!Number.isInteger(n)) throw new HttpError(400, "Invalid id"); return n; };
@@ -46,35 +47,23 @@ extra.get("/donors/:id", wrap(async (req) => {
   return { donor: d, checkA: checkA(toDonorMetrics(d), clusterFor), links: (await loadLinks()).filter((l) => l.donorId === id) };
 }));
 extra.post("/donors", wrap(async (req, res) => { res.status(201); return (await db.insert(s.donors).values(donorBody.parse(req.body)).returning())[0]; }));
-extra.put("/donors/:id", wrap(async (req) => (await db.update(s.donors).set(donorBody.partial().parse(req.body)).where(eq(s.donors.id, idOf(req.params.id))).returning())[0]));
+extra.put("/donors/:id", wrap(async (req) => (await db.update(s.donors).set(given(donorBody.partial().parse(req.body), req.body)).where(eq(s.donors.id, idOf(req.params.id))).returning())[0]));
 extra.delete("/donors/:id", wrap(async (req) => { (await db.delete(s.donors).where(eq(s.donors.id, idOf(req.params.id)))); return { ok: true }; }));
-extra.post("/donors/sync-ahrefs", wrap(async () => {
+/** Spends Ahrefs API units (about 5 calls per donor), so by default only donors that still have no numbers are looked up. `?all=1` refreshes everyone. */
+extra.post("/donors/sync-ahrefs", wrap(async (req) => {
   const key = await getAhrefsKey();
-  if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings first; we don't make up traffic numbers.");
-  return { ...(await syncMany(await db.select().from(s.donors), key)), mock: false };
+  if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings, or enter the numbers by hand on the Donors page.");
+  const all = (await db.select().from(s.donors));
+  const todo = req.query.all === "1" ? all : all.filter((d) => !d.ahrefsSyncedAt && !d.dr && !d.usTrafficPct && !d.organicTraffic && !d.referringDomains);
+  return { ...(await syncMany(todo, key)), skipped: all.length - todo.length, mock: false };
 }));
-
-/* ---------------- citations ---------------- */
-const citeBody = z.object({ clientId: z.number().int(), directory: z.string().min(1), name: z.string().min(1), address: z.string().min(1), phone: z.string().min(1) });
-async function citeFields(b: z.infer<typeof citeBody>) {
-  const c = (await db.select().from(s.clients).where(eq(s.clients.id, b.clientId)))[0];
-  if (!c) throw new HttpError(400, "Unknown client");
-  const gbp = { name: c.gbpName ?? "", address: c.gbpAddress ?? "", phone: c.gbpPhone ?? "" };
-  const m = napMatch(b, gbp);
-  return { ...b, gbpMatch: m.match, status: m.match === "Matched" ? "Logged" : "Mismatch", updatedAt: new Date(), _fields: m.fields, _gbp: gbp };
-}
-extra.get("/citations", wrap(async () => {
-  const clients = new Map((await db.select().from(s.clients)).map((c) => [c.id, c]));
-  const rows = (await db.select().from(s.citations).orderBy(desc(s.citations.updatedAt))).map((c) => {
-    const cl = clients.get(c.clientId);
-    const gbp = { name: cl?.gbpName ?? "", address: cl?.gbpAddress ?? "", phone: cl?.gbpPhone ?? "" };
-    return { ...c, client: cl ?? null, gbp, fields: napMatch(c, gbp).fields };
-  });
-  return { rows, totals: { total: rows.length, matched: rows.filter((r) => r.gbpMatch === "Matched").length, mismatches: rows.filter((r) => r.gbpMatch === "Mismatch").length } };
+extra.post("/donors/:id/sync-ahrefs", wrap(async (req) => {
+  const key = await getAhrefsKey();
+  if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings, or enter the numbers by hand.");
+  const d = (await db.select().from(s.donors).where(eq(s.donors.id, idOf(req.params.id))))[0];
+  if (!d) throw new HttpError(404, "Donor not found");
+  try { return await syncDonor(d, key); } catch (e) { throw new HttpError(502, `Ahrefs lookup failed: ${(e as Error).message}`); }
 }));
-extra.post("/citations", wrap(async (req, res) => { const { _fields, _gbp, ...v } = await citeFields(citeBody.parse(req.body)); res.status(201); return (await db.insert(s.citations).values(v).returning())[0]; }));
-extra.put("/citations/:id", wrap(async (req) => { const { _fields, _gbp, ...v } = await citeFields(citeBody.parse(req.body)); return (await db.update(s.citations).set(v).where(eq(s.citations.id, idOf(req.params.id))).returning())[0]; }));
-extra.delete("/citations/:id", wrap(async (req) => { (await db.delete(s.citations).where(eq(s.citations.id, idOf(req.params.id)))); return { ok: true }; }));
 
 /* ---------------- prospects ---------------- */
 const NOISE = [...SPAM_TLDS, ...NON_US_TLDS];
@@ -108,7 +97,7 @@ extra.post("/prospects", wrap(async (req, res) => {
   res.status(201);
   return (await db.insert(s.prospects).values({ ...b, score: h.score, label: h.label, whyItScored: h.why, scoreSource: "heuristic" }).returning())[0];
 }));
-extra.put("/prospects/:id", wrap(async (req) => (await db.update(s.prospects).set(prospectBody.partial().parse(req.body)).where(eq(s.prospects.id, idOf(req.params.id))).returning())[0]));
+extra.put("/prospects/:id", wrap(async (req) => (await db.update(s.prospects).set(given(prospectBody.partial().parse(req.body), req.body)).where(eq(s.prospects.id, idOf(req.params.id))).returning())[0]));
 extra.delete("/prospects/:id", wrap(async (req) => { (await db.delete(s.prospects).where(eq(s.prospects.id, idOf(req.params.id)))); return { ok: true }; }));
 
 extra.post("/prospects/discover", wrap(async (req) => {

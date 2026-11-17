@@ -2,20 +2,20 @@ import { AdminOnly } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner, Field, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Dialog, Drawer } from "@/components/ui/overlays";
-import { del, get, post, useApi } from "@/lib/api";
+import { del, get, post, put, useApi } from "@/lib/api";
 import { fmtDate, fmtNum } from "@/lib/utils";
 import { FilterBar, Kpi, KpiRow, PageHeader, Panel, Pager, RefreshButton, Sub, Table, TableSkeleton, THead, VerdictBadge, usePaged } from "@/features/shared/common";
 import { CLUSTERS } from "@server/services/constants";
 
-function DonorDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
+function DonorDialog({ open, onOpenChange, onSaved, donor }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void; donor?: any | null }) {
   const blank = { domain: "", name: "", dr: 0, usTrafficPct: 0, organicTraffic: 0, referringDomains: 0, linkedDomains: 0, cluster: CLUSTERS[0] as string, niche: "", isLocal: false, localArea: "" };
   const [f, setF] = useState<any>(blank); const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { if (open) { setF(blank); setErr(null); } }, [open]); // eslint-disable-line
+  useEffect(() => { if (open) { setF(donor ? { ...blank, ...Object.fromEntries(Object.entries(donor).filter(([k]) => k in blank).map(([k, v]) => [k, v ?? (typeof (blank as any)[k] === "number" ? 0 : "")])) } : blank); setErr(null); } }, [open, donor]); // eslint-disable-line
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
   const num = (k: string, label: string) => <Field label={label}><Input type="number" min={0} value={f[k]} onChange={(e) => set(k, Number(e.target.value))} /></Field>;
-  async function submit(e: React.FormEvent) { e.preventDefault(); try { await post("/donors", { ...f, name: f.name || null, niche: f.niche || null, localArea: f.localArea || null }); onSaved(); onOpenChange(false); } catch (e: any) { setErr(e.message); } }
+  async function submit(e: React.FormEvent) { e.preventDefault(); try { const body = { ...f, name: f.name || null, niche: f.niche || null, localArea: f.localArea || null }; donor ? await put(`/donors/${donor.id}`, body) : await post("/donors", body); onSaved(); onOpenChange(false); } catch (e: any) { setErr(e.message); } }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} wide title="Add donor" description="Metrics can be refreshed later with Sync from Ahrefs.">
+    <Dialog open={open} onOpenChange={onOpenChange} wide title={donor ? `Edit ${donor.domain}` : "Add donor"} description="Type the numbers in by hand (from any SEO tool), or use Look up to fetch them from Ahrefs.">
       <form onSubmit={submit} className="space-y-3">{err && <ErrorBanner message={err} />}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Domain *"><Input required value={f.domain} onChange={(e) => set("domain", e.target.value)} /></Field>
@@ -26,7 +26,7 @@ function DonorDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenCha
           <Field label="Local area"><Input value={f.localArea} onChange={(e) => set("localArea", e.target.value)} placeholder="Houston, TX" /></Field>
         </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.isLocal} onChange={(e) => set("isLocal", e.target.checked)} />Local donor (min traffic 300)</label>
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button>Add donor</Button></div>
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button>{donor ? "Save" : "Add donor"}</Button></div>
       </form>
     </Dialog>
   );
@@ -54,14 +54,15 @@ export default function DonorsPage() {
   const [preview, setPreview] = useState(""); const [f, setF] = useState({ q: "", cluster: "", local: false });
   const { data, error, loading, reload } = useApi(`/donors${preview ? `?previewClient=${preview}` : ""}`);
   const { data: cl } = useApi("/clients");
-  const [adding, setAdding] = useState(false); const [view, setView] = useState<number | null>(null); const [delT, setDelT] = useState<any>(null);
+  const [adding, setAdding] = useState(false); const [editD, setEditD] = useState<any | null>(null); const [lookingUp, setLookingUp] = useState<number | null>(null); const [view, setView] = useState<number | null>(null); const [delT, setDelT] = useState<any>(null);
   const [syncing, setSyncing] = useState(false); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
   const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.domain} ${r.name}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.cluster || r.cluster === f.cluster) && (!f.local || r.isLocal));
   const pg = usePaged(rows, [f, preview]); const t = data?.totals;
-  async function sync() { setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(`Synced ${r.synced}/${r.total} donors${r.mock ? " (mock data — add your Ahrefs key in Settings)" : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
+  async function lookup(id: number) { setLookingUp(id); setErr(null); setMsg(null); try { await post(`/donors/${id}/sync-ahrefs`); reload(); } catch (e: any) { setErr(e.message); } finally { setLookingUp(null); } }
+  async function sync() { setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(r.total === 0 ? "Every donor already has numbers. Use Look up on a row to refresh one." : `Looked up ${r.synced} of ${r.total} donors with no numbers${r.skipped ? ` (${r.skipped} already had numbers)` : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
   return (
     <>
-      <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Syncing…" : "Sync from Ahrefs"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />
+      <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Looking up…" : "Look up missing"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       {msg && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">{msg}</div>}
       <KpiRow><Kpi label="Donors" value={t?.donors} loading={loading} /><Kpi label="Average DR" value={t?.avgDr} loading={loading} /><Kpi label="Local donors" value={t?.local} loading={loading} /><Kpi label="Reuse warnings" value={t?.reuseWarnings} tone="amber" loading={loading} /></KpiRow>
@@ -81,12 +82,12 @@ export default function DonorsPage() {
                 <td>{r.localArea ?? "—"}</td>
                 <td><Badge tone={r.reuseWarning ? "amber" : "neutral"}>{r.clientsLinked} / 3</Badge>{r.reuseForPreview && <Sub>reused &lt; 6 mo</Sub>}</td>
                 <td>{fmtDate(r.lastUsedAt)}</td>
-                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <AdminOnly><Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></AdminOnly></td></tr>
+                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <AdminOnly><Button size="sm" variant="outline" onClick={() => setEditD(r)}>Edit</Button> <Button size="sm" variant="outline" disabled={lookingUp === r.id} onClick={() => lookup(r.id)} title="Fetch from Ahrefs (uses API units)">{lookingUp === r.id ? "…" : "Look up"}</Button> <Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></AdminOnly></td></tr>
             ))}</tbody></Table>
         )}
         <Pager p={pg} />
       </Panel>
-      <DonorDialog open={adding} onOpenChange={setAdding} onSaved={reload} /><DonorDrawer id={view} onClose={() => setView(null)} />
+      <DonorDialog open={adding} onOpenChange={setAdding} onSaved={reload} /><DonorDialog open={!!editD} donor={editD} onOpenChange={(o) => !o && setEditD(null)} onSaved={reload} /><DonorDrawer id={view} onClose={() => setView(null)} />
       <ConfirmDialog open={!!delT} onOpenChange={(o) => !o && setDelT(null)} title="Delete donor?" description={delT && `${delT.domain} — blocked if links still use it.`} onConfirm={async () => { try { await del(`/donors/${delT.id}`); reload(); } catch (e: any) { setErr(e.message); } }} />
     </>
   );

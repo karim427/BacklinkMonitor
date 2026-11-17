@@ -41,7 +41,7 @@ export default function SettingsPage() {
     setErr(null); setMsg(null); setAhBusy(true);
     try {
       const r = await put("/settings/ahrefs-key", { key: remove ? null : ahKey });
-      setMsg(remove ? "Ahrefs key removed. New donors will show \"metrics not loaded\"." : r.verified ? `Ahrefs key saved and verified.${r.sync ? ` Looked up traffic for ${r.sync.synced} of ${r.sync.total} donors.` : ""}` : "Ahrefs key saved, but it could not be verified right now.");
+      setMsg(remove ? "Ahrefs key removed. New donors will show \"metrics not loaded\"." : r.verified ? "Ahrefs key saved and verified. Nothing is looked up until you ask (see below)." : "Ahrefs key saved, but it could not be verified right now.");
       setAhKey(""); reload();
     } catch (e: any) { setErr(e.message); } finally { setAhBusy(false); }
   }
@@ -64,10 +64,10 @@ export default function SettingsPage() {
               <span className="text-sm font-medium">{c}</span><Badge>{clients.filter((x) => x.cluster === c).length}</Badge>
               <span className="ml-1 hidden truncate text-xs text-zinc-500 sm:inline">Niches: {CLUSTER_NICHES[c].join(", ")}</span>
             </button>
-            {openCluster[c] && <Table><THead cols={["Client", "City / state", "Cash buyer", "Monthly target", "GBP", ""]} /><tbody>
-              {clients.filter((x) => x.cluster === c).map((x) => { const g = [x.gbpName, x.gbpAddress, x.gbpPhone].filter(Boolean).length; return (
+            {openCluster[c] && <Table><THead cols={["Client", "City / state", "Cash buyer", "Monthly target", ""]} /><tbody>
+              {clients.filter((x) => x.cluster === c).map((x) => { return (
                 <tr key={x.id}><td><div className="font-medium">{x.name}</div><div className="text-xs text-zinc-500">{x.domain} · {x.slug}</div></td><td>{x.city}{x.state && `, ${x.state}`}</td><td>{x.isCashBuyer ? "Yes" : "No"}</td><td><TargetCell client={x} onSaved={() => { setMsg(`Monthly target for ${x.name} saved.`); reloadClients(); }} onError={(m) => setErr(m)} /></td>
-                  <td><Badge tone={g === 3 ? "green" : "amber"}>GBP {g}/3</Badge></td><td><RowMenu items={[{ label: "Edit", onSelect: () => setEdit({ c: x }) }, { label: "Delete", danger: true, onSelect: () => setDelT(x) }]} /></td></tr>); })}
+                  <td><RowMenu items={[{ label: "Edit", onSelect: () => setEdit({ c: x }) }, { label: "Delete", danger: true, onSelect: () => setDelT(x) }]} /></td></tr>); })}
             </tbody></Table>}
           </div>
         ))}
@@ -86,7 +86,10 @@ export default function SettingsPage() {
             <div className="flex gap-2"><Button disabled={ahBusy || ahKey.trim().length < 8}>{ahBusy ? "Checking…" : "Save key"}</Button>
               {ah?.source === "settings" && <Button type="button" variant="ghost" disabled={ahBusy} onClick={() => saveAhKey(true)}>Remove key</Button>}</div>
           </form></AdminOnly>
-          <Button className="mt-4" variant="outline" disabled={syncing} onClick={async () => { setSyncing(true); try { const r = await post("/donors/sync-ahrefs"); setMsg(`Synced ${r.synced}/${r.total} donors${r.mock ? " (mock)" : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }}>{syncing ? "Syncing…" : "Sync donors"}</Button></Card>
+          <AdminOnly><label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={!!s.ahrefsAutoLookup}
+            onChange={async (e) => { const v = e.target.checked; setS({ ...s, ahrefsAutoLookup: v }); await save({ ahrefsAutoLookup: v }, "Automatic lookup setting"); }} />
+            <span>Look up new donors automatically<span className="block text-xs text-zinc-500">Off by default. Each lookup uses about 5 Ahrefs API calls, so with this off you enter numbers by hand or use Look up on the Donors page.</span></span></label></AdminOnly>
+          <Button className="mt-4" variant="outline" disabled={syncing} onClick={async () => { setSyncing(true); try { const r = await post("/donors/sync-ahrefs"); setMsg(r.total === 0 ? "Every donor already has numbers." : `Looked up ${r.synced} of ${r.total} donors with no numbers.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }}>{syncing ? "Looking up…" : "Look up donors with no numbers"}</Button></Card>
         <Card className="p-5"><h2 className="mb-3 text-sm font-semibold">Verification defaults</h2>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><Field label="Verifier user agent"><Input value={s.verifierUserAgent} onChange={(e) => setS({ ...s, verifierUserAgent: e.target.value })} /></Field></div>

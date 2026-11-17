@@ -88,6 +88,8 @@ export const DEFAULT_SETTINGS = {
   nextRecheckDays: 90,
   fixWindowDays: 14,
   defaultMonthlyTarget: 4,
+  /** Look up new donors on Ahrefs automatically. Off by default: each lookup costs Ahrefs API units. */
+  ahrefsAutoLookup: false,
   anchorBands: DEFAULT_ANCHOR_BANDS,
 };
 export type AppSettings = typeof DEFAULT_SETTINGS;

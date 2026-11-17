@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { BookUser, Building2, FileCheck2, Gauge, Globe2, Link2, ListChecks, Menu, MapPin, Megaphone, Plus, RefreshCcw, Search, Settings, Users, LogOut, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { BookUser, Building2, FileCheck2, Gauge, Globe2, Link2, ListChecks, Menu, Megaphone, Plus, RefreshCcw, Search, Settings, Users, LogOut, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Badge, Button } from "./ui/primitives";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -14,7 +14,6 @@ const NAV = [
   { to: "/links", label: "Links", icon: Link2 },
   { to: "/target-pages", label: "Target pages", icon: FileCheck2 },
   { to: "/donors", label: "Donors", icon: Globe2 },
-  { to: "/citations", label: "Citations", icon: MapPin },
   { to: "/rechecks", label: "Rechecks", icon: RefreshCcw },
   { to: "/prospects", label: "Prospects", icon: Search, badge: "AI", admin: true },
   { to: "/haro", label: "HARO", icon: Megaphone, badge: "AI", admin: true },
