@@ -12,6 +12,14 @@ export default function DashboardPage() {
   const nav = useNavigate();
   const [err, setErr] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const { data: lost, reload: reloadLost } = useApi("/lost-links?days=60");
+  const [checking, setChecking] = useState(false); const [lostMsg, setLostMsg] = useState<string | null>(null);
+  async function checkLost() {
+    if (!window.confirm("This asks Ahrefs about each client that has links, one request per client. Each request uses API units (at least 50). Continue?")) return;
+    setChecking(true); setLostMsg(null);
+    try { const r = await post("/lost-links/refresh", {}); setLostMsg(`Asked Ahrefs about ${r.clients} client${r.clients === 1 ? "" : "s"} (${r.requests} request${r.requests === 1 ? "" : "s"}).`); reloadLost(); }
+    catch (e: any) { setLostMsg(e.message); } finally { setChecking(false); }
+  }
   const p = d?.progress;
   const pct = p && d.target ? Math.round((p.relevant / d.target) * 100) : 0;
 
@@ -91,14 +99,28 @@ export default function DashboardPage() {
           ))}
         </Card>
         <Card className="p-5">
-          <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Lost links</h2><Button size="sm" variant="outline" asChild><Link to="/links?">View links</Link></Button></div>
-          <p className="mb-2 text-xs text-zinc-500">Lost or not relevant in the last 60 days</p>
-          {!d?.lostLinks.length ? <EmptyState title="No lost links" /> : d.lostLinks.map((l: any) => (
-            <div key={l.id} className="flex items-center justify-between gap-2 border-t border-zinc-100 py-2.5 first:border-0 text-sm">
-              <div className="min-w-0"><p className="truncate font-medium">{l.client?.name}</p><p className="truncate text-xs text-zinc-500">{l.donor?.domain}</p></div>
-              <VerdictBadge v={l.stage === "Lost" ? "Not relevant" : l.verdict} />
-            </div>
-          ))}
+          <div className="mb-1 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">Lost links</h2>
+            <div className="flex gap-2"><AdminOnly><Button size="sm" variant="outline" disabled={checking} onClick={checkLost}>{checking ? "Asking Ahrefs…" : "Check Ahrefs"}</Button></AdminOnly>
+              <Button size="sm" variant="outline" asChild><Link to="/links?">View links</Link></Button></div></div>
+          <p className="mb-2 text-xs text-zinc-500">Reported lost by Ahrefs in the last 60 days{lost?.fetchedAt ? ` · checked ${new Date(lost.fetchedAt).toLocaleDateString()}` : ""}</p>
+          {lostMsg && <p className="mb-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-700">{lostMsg}</p>}
+          {!!lost?.errors?.length && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{lost.errors.slice(0, 2).join(" · ")}</p>}
+          {lost && !lost.hasKey ? <EmptyState title="Ahrefs isn't connected" hint="Add your Ahrefs API key in Settings to see links Ahrefs reports as lost." />
+            : lost && !lost.fetchedAt ? <EmptyState title="Not checked yet" hint="Click “Check Ahrefs” to look up lost links for your clients." />
+            : !lost?.rows.length ? <EmptyState title="No lost links" hint="Ahrefs hasn't reported any in this period." />
+            : lost.rows.slice(0, 8).map((l: any) => (
+              <div key={`${l.clientId}-${l.urlFrom}`} className="flex items-start justify-between gap-2 border-t border-zinc-100 py-2.5 first:border-0 text-sm">
+                <div className="min-w-0"><p className="truncate font-medium">{l.client}</p>
+                  <a className="block truncate text-xs text-blue-600 hover:underline" href={l.urlFrom} target="_blank" rel="noreferrer">{l.donor}</a>
+                  <p className="text-xs text-zinc-500">{l.reasonLabel}{l.lostAt ? ` · ${new Date(l.lostAt).toLocaleDateString()}` : ""}</p></div>
+                {l.ours ? <Badge tone="blue" title="This is a link you placed">Placed by us{l.ours.addedBy ? ` · ${l.ours.addedBy}` : ""}</Badge> : <Badge>Not tracked here</Badge>}
+              </div>
+            ))}
+          {!!d?.lostLinks.filter((l: any) => l.stage === "Lost").length && (
+            <div className="mt-3 border-t border-zinc-200 pt-3"><p className="mb-1 text-xs font-medium text-zinc-600">Found missing by our own checks</p>
+              {d.lostLinks.filter((l: any) => l.stage === "Lost").map((l: any) => (
+                <div key={l.id} className="flex items-center justify-between gap-2 py-1 text-sm"><span className="truncate">{l.client?.name} · <span className="text-xs text-zinc-500">{l.donor?.domain}</span></span><Badge tone="red">Lost</Badge></div>))}
+            </div>)}
         </Card>
       </div>
 

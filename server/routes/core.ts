@@ -12,6 +12,7 @@ import { given } from "../util.js";
 import { ahrefsStatus, checkAhrefsKey, getAhrefsKey, setAhrefsKey } from "../services/secrets.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { autoLookupEnabled } from "../services/donorMetrics.js";
+import { listLost, refreshLost } from "../services/ahrefsLost.js";
 
 export const core = Router();
 
@@ -305,6 +306,15 @@ core.post("/links/import", wrap(async (req) => {
 
 /* ---------------- rechecks ---------------- */
 /** Per-client check results for one month: links confirmed indexed, spam links picked up, and links lost. */
+/** Lost backlinks as reported by Ahrefs (cached). Viewing costs nothing; refreshing spends Ahrefs API units, so it only happens on request. */
+core.get("/lost-links", wrap(async (req) => {
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 60));
+  return { ...(await listLost(days)), days, hasKey: !!(await getAhrefsKey()) };
+}));
+core.post("/lost-links/refresh", wrap(async (req) => {
+  const b = z.object({ clientId: z.number().int().optional(), days: z.number().int().min(1).max(365).optional() }).parse(req.body ?? {});
+  try { return await refreshLost(b); } catch (e) { throw new HttpError(400, (e as Error).message); }
+}));
 core.get("/rechecks/summary", wrap(async (req) => {
   const month = monthParam(req);
   const start = new Date(`${month}-01T00:00:00Z`); const end = new Date(`${addMonths(month, 1)}-01T00:00:00Z`);
