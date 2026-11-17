@@ -11,14 +11,15 @@ export default function UsersPage() {
   const { user: me } = useAuth();
   const { data, error, loading, reload } = useApi("/users");
   const [inviting, setInviting] = useState(false); const [email, setEmail] = useState(""); const [name, setName] = useState(""); const [role, setRole] = useState("user");
-  const [err, setErr] = useState<string | null>(null); const [msg, setMsg] = useState<string | null>(null); const [delU, setDelU] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null); const [msg, setMsg] = useState<string | null>(null); const [delU, setDelU] = useState<any>(null); const [issued, setIssued] = useState<{ email: string; code: string; expiresAt: string } | null>(null); const [copied, setCopied] = useState(false);
   const rows: any[] = data?.rows ?? [];
 
   async function invite(e: React.FormEvent) {
     e.preventDefault(); setErr(null);
-    try { const r = await post("/users", { email, name, role }); setInviting(false); setEmail(""); setName(""); setRole("user"); setMsg(r.emailed ? `Invited ${r.email}. They can sign in now.` : `Added ${r.email}, but the invite email could not be sent. They can still sign in with their email.`); reload(); }
+    try { const r = await post("/users", { email, name, role }); setInviting(false); setEmail(""); setName(""); setRole("user"); setMsg(r.emailed ? `Invited ${r.email}. They can sign in now.` : `Added ${r.email}, but the invite email could not be sent. Use “Sign-in code” on their row to give them a code directly.`); reload(); }
     catch (e: any) { setErr(e.message); }
   }
+  async function issueCode(id: number) { setErr(null); setCopied(false); try { setIssued(await post(`/users/${id}/code`)); } catch (e: any) { setErr(e.message); } }
   async function patch(id: number, body: Record<string, unknown>) { setErr(null); try { await put(`/users/${id}`, body); reload(); } catch (e: any) { setErr(e.message); } }
 
   return (
@@ -41,7 +42,7 @@ export default function UsersPage() {
                     <td><Badge tone={u.active ? "green" : "neutral"}>{u.active ? "Active" : "Disabled"}</Badge></td>
                     <td className="whitespace-nowrap text-zinc-500">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never"}</td>
                     <td className="whitespace-nowrap text-right">
-                      {!isMe && <><Button size="sm" variant="outline" onClick={() => patch(u.id, { active: !u.active })}>{u.active ? "Disable" : "Enable"}</Button> <Button size="sm" variant="ghost" onClick={() => setDelU(u)}>Remove</Button></>}
+                      {!isMe && <>{u.active && <Button size="sm" variant="outline" onClick={() => issueCode(u.id)}>Sign-in code</Button>} <Button size="sm" variant="outline" onClick={() => patch(u.id, { active: !u.active })}>{u.active ? "Disable" : "Enable"}</Button> <Button size="sm" variant="ghost" onClick={() => setDelU(u)}>Remove</Button></>}
                     </td>
                   </tr>
                 );
@@ -58,6 +59,11 @@ export default function UsersPage() {
           {err && <ErrorBanner message={err} />}
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setInviting(false)}>Cancel</Button><Button disabled={!email}>Send invite</Button></div>
         </form>
+      </Dialog>
+      <Dialog open={!!issued} onOpenChange={(o) => !o && setIssued(null)} title="Sign-in code" description={issued ? `Send this to ${issued.email}. They enter it on the sign-in page after typing their email.` : ""}>
+        <div className="my-2 rounded-lg bg-zinc-50 py-4 text-center font-mono text-3xl font-semibold tracking-[0.4em]">{issued?.code}</div>
+        <p className="text-xs text-zinc-500">Works once and expires at {issued ? new Date(issued.expiresAt).toLocaleTimeString() : ""} (1 hour). It's shown only now — generate a new one if you lose it.</p>
+        <div className="mt-4 flex justify-end gap-2"><Button variant="outline" onClick={() => { navigator.clipboard?.writeText(issued!.code); setCopied(true); }}>{copied ? "Copied" : "Copy code"}</Button><Button onClick={() => setIssued(null)}>Done</Button></div>
       </Dialog>
       <ConfirmDialog open={!!delU} onOpenChange={(o) => !o && setDelU(null)} title="Remove user?" description={delU?.email} onConfirm={async () => { try { await del(`/users/${delU.id}`); setDelU(null); reload(); } catch (e: any) { setErr(e.message); setDelU(null); } }} />
     </>

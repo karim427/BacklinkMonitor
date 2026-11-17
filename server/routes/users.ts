@@ -11,6 +11,7 @@ export const auth = Router();   // public: mounted before the gate (the gate ski
 export const users = Router();  // admin only: enforced by the gate
 
 const CODE_TTL_MS = 10 * 60_000;
+const ADMIN_CODE_TTL_MS = 60 * 60_000;
 const MAX_ATTEMPTS = 5;
 const MAX_CODES_PER_HOUR = 5;
 const pub = (u: { id: number; email: string; name: string | null; role: string }): AuthUser => ({ id: u.id, email: u.email, name: u.name, role: u.role as AuthUser["role"] });
@@ -94,6 +95,18 @@ users.put("/users/:id", wrap(async (req) => {
   const losesAdmin = cur.role === "admin" && cur.active && ((b.role && b.role !== "admin") || b.active === false);
   if (losesAdmin && (await activeAdmins()) <= 1) throw new HttpError(400, "There must be at least one active admin");
   return (await db.update(s.users).set(b).where(eq(s.users.id, id)).returning())[0];
+}));
+
+/** For when email can't be delivered (e.g. no verified Resend domain): the admin hands the code over directly. */
+users.post("/users/:id/code", wrap(async (req) => {
+  const id = idOf(String(req.params.id));
+  const u = (await db.select().from(s.users).where(eq(s.users.id, id)))[0];
+  if (!u) throw new HttpError(404, "User not found");
+  if (!u.active) throw new HttpError(400, "This user is disabled");
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  const expiresAt = new Date(Date.now() + ADMIN_CODE_TTL_MS);
+  await db.insert(s.loginCodes).values({ email: u.email, codeHash: codeHash(u.email, code), expiresAt });
+  return { email: u.email, code, expiresAt };
 }));
 
 users.delete("/users/:id", wrap(async (req) => {
