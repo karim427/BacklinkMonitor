@@ -6,10 +6,17 @@ export const aiStatus = () => ({
 
 export async function chat(messages: { role: "system" | "user"; content: string }[], opts: { webSearch?: boolean; json?: boolean } = {}): Promise<string> {
   if (!aiConfigured()) throw new Error("AI not configured");
+  const base = process.env.AI_BASE_URL ?? "";
   const body: any = { model: process.env.AI_MODEL ?? "glm-4.6", messages, temperature: 0.2 };
-  // The web_search tool is z.ai-specific; OpenAI's chat API rejects it, so only send it to z.ai.
-  if (opts.webSearch && (process.env.AI_BASE_URL ?? "").includes("z.ai")) body.tools = [{ type: "web_search", web_search: { enable: true, search_engine: "search-prime" } }];
   if (opts.json) body.response_format = { type: "json_object" };
+  if (opts.webSearch && base.includes("z.ai")) {
+    body.tools = [{ type: "web_search", web_search: { enable: true, search_engine: "search-prime" } }];
+  } else if (opts.webSearch && base.includes("api.openai.com")) {
+    // OpenAI searches the live web only through its search models. They reject temperature and JSON mode (the prompt already asks for JSON).
+    body.model = process.env.AI_SEARCH_MODEL ?? "gpt-5-search-api";
+    body.web_search_options = {};
+    delete body.temperature; delete body.response_format;
+  }
   const r = await fetch(`${process.env.AI_BASE_URL!.replace(/\/$/, "")}/chat/completions`, {
     method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.AI_API_KEY}` }, body: JSON.stringify(body),
   });
