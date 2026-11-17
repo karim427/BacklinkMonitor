@@ -71,7 +71,7 @@ export const REJECT_RULES: RejectRule[] = [
 ];
 
 /** Not one of the 26 reject rules: a data gap flag. Treated as fixable so the link stays "Partly relevant" until metrics are loaded. */
-export const DONOR_METRICS_MISSING: RejectRule = { code: "donor_metrics_missing", category: "Quality", label: "Not judged yet: this donor has no DR or traffic numbers. Enter them on the Donors page (Edit) or use Look up.", fixable: true };
+export const DONOR_METRICS_MISSING: RejectRule = { code: "donor_metrics_missing", category: "Quality", label: "Needs donor numbers", fixable: true };
 export const RULE_BY_CODE: Record<string, RejectRule> = Object.fromEntries([...REJECT_RULES, DONOR_METRICS_MISSING].map((r) => [r.code, r]));
 
 /** Reject codes that mean "spammy / low-quality site" (used for the monthly spam count on Rechecks). */

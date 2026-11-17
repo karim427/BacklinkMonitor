@@ -1,3 +1,4 @@
+import { InfoTip } from "@/components/InfoTip";
 import { AdminOnly } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner, Field, Input, Select } from "@/components/ui/primitives";
@@ -74,7 +75,7 @@ export default function DonorsPage() {
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.local} onChange={(e) => setF({ ...f, local: e.target.checked })} />Local only</label>
         </FilterBar>
         {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No donors" /> : (
-          <Table><THead cols={["Donor", "DR", "US %", "Organic traffic", "Local area", "Clients", "Last used", ""]} />
+          <Table><THead cols={["Donor", <>DR<InfoTip text="Domain Rating from Ahrefs (0 to 100). 20 or more is required." to="/guide#donors" /></>, <>US %<InfoTip text="Share of the site's visitors from the US. 60% or more is required." to="/guide#donors" /></>, <>Organic traffic<InfoTip text="Monthly visits from search. Minimum 1,000, or 300 for local sites." to="/guide#donors" /></>, "Local area", <>Clients<InfoTip text="How many different clients this site already links to. More than 3 is rejected." to="/guide#donors" /></>, "Last used", ""]} />
             <tbody>{pg.slice.map((r) => (
               <tr key={r.id}><td><div className="font-medium">{r.domain}</div><Sub>{r.name} · {r.cluster}</Sub></td><td>{r.dr}</td>
                 <td className={r.usTrafficPct < 60 ? "text-red-600" : ""}>{r.usTrafficPct}%</td>

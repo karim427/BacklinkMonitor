@@ -5,16 +5,17 @@ import { Button, EmptyState, ErrorBanner, Input, Select } from "@/components/ui/
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
 import { authHeaders, del, post, useApi } from "@/lib/api";
 import { cn, fmtDate, monthLabel, ruleLabel } from "@/lib/utils";
-import { PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, ActionBadge, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, ext } from "@/features/shared/common";
+import { PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, ActionBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
 import { ExportDialog } from "@/features/links/ExportDialog";
 import { StatusSelect } from "@/features/links/StatusSelect";
-import { PRE_LIVE, STAGES, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
+import { PRE_LIVE, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
+import { InfoTip } from "@/components/InfoTip";
 
 export default function LinksPage() {
   const { data, error, loading, reload } = useApi("/links");
   const [sp, setSp] = useSearchParams();
-  const blank = { q: "", client: "", verdict: "", stage: "", ver: "", donor: "", month: "", due: false };
+  const blank = { q: "", client: "", verdict: "", ver: "", donor: "", month: "", due: false };
   const [f, setF] = useState({ ...blank, client: sp.get("client") ?? "", month: sp.get("month") ?? "" });
   // Months are dropdowns: the newest (or the one picked in the Month filter) starts open.
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
@@ -32,7 +33,7 @@ export default function LinksPage() {
   const filtered = rows.filter((l) => {
     const q = f.q.toLowerCase();
     return (!q || [l.sourceUrl, l.targetUrl, l.anchorText, l.client?.name, l.donor?.domain].join(" ").toLowerCase().includes(q)) &&
-      (!f.client || String(l.clientId) === f.client) && (!f.month || l.month === f.month) && (!f.verdict || l.verdict === f.verdict) && (!f.stage || l.stage === f.stage) &&
+      (!f.client || String(l.clientId) === f.client) && (!f.month || l.month === f.month) && (!f.verdict || l.verdict === f.verdict) &&
       (!f.ver || l.verificationStatus === f.ver) && (!f.donor || String(l.donorId) === f.donor) && (!f.due || (l.nextCheckAt && new Date(l.nextCheckAt) <= new Date() && l.stage !== "Lost"));
   });
   const months = useMemo(() => [...new Set<string>(rows.map((l) => l.month))].sort().reverse(), [rows]);
@@ -70,7 +71,6 @@ export default function LinksPage() {
           <Select className="w-40" value={f.client} onChange={(v) => set("client", v)} placeholder="All clients" options={clients} />
           <Select className="w-44" value={f.month} onChange={(v) => set("month", v)} placeholder="All months" options={months.map((m) => ({ value: m, label: monthLabel(m) }))} />
           <Select className="w-40" value={f.verdict} onChange={(v) => set("verdict", v)} placeholder="All verdicts" options={VERDICTS.map((v) => ({ value: v, label: v }))} />
-          <Select className="w-36" value={f.stage} onChange={(v) => set("stage", v)} placeholder="All stages" options={STAGES.map((v) => ({ value: v, label: v }))} />
           <Select className="w-40" value={f.ver} onChange={(v) => set("ver", v)} placeholder="All verification" options={VERIFICATION_STATUSES.map((v) => ({ value: v, label: v }))} />
           <Select className="w-52" value={f.donor} onChange={(v) => set("donor", v)} placeholder="All donors" options={donors} />
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.due} onChange={(e) => set("due", e.target.checked)} />Due only</label>
@@ -86,7 +86,11 @@ export default function LinksPage() {
                 </button>
                 {isOpen(g) && (
                   <Table>
-                    <THead cols={["Client", "Target page", "Donor", "Anchor", "Verdict", "Status", "Check", "Last checked", ""]} />
+                    <THead cols={["Client", "Target page", "Donor", "Anchor",
+                      <>Verdict<InfoTip text="Is the link any good? Relevant counts toward the target. Judged only once the link is live." to="/guide#verdict" /></>,
+                      <>Status<InfoTip text="Where the link is: Pending, In process, Live, Replace, Lost or Rejected. Click it to change." to="/guide#status" /></>,
+                      <>Check<InfoTip text="Verified only means the page was opened and read. It does not mean your link was found." to="/guide#checks" /></>,
+                      "Last checked", ""]} />
                     <tbody>
               {ls.map((l) => (
                 <tr key={l.id}>
@@ -94,8 +98,12 @@ export default function LinksPage() {
                   <td className="max-w-56"><div className="truncate">{l.targetPage?.keyword ?? "—"}</div><Sub><span className="block truncate">{l.targetUrl}</span></Sub></td>
                   <td><div>{l.donor?.domain}</div><Sub>{l.donor && !l.donor.ahrefsSyncedAt && !l.donor.dr && !l.donor.organicTraffic ? "Traffic not checked yet" : `DR ${l.donor?.dr} · ${l.donor?.usTrafficPct}% US · ${(l.donor?.organicTraffic ?? 0).toLocaleString("en-US")} visits · ${l.donor?.referringDomains} RDs`}</Sub></td>
                   <td><div>{l.anchorText || "—"}</div><Sub>{l.anchorType}</Sub></td>
-                  <td>{l.action === "REJECTED" ? <><VerdictBadge v="Not relevant" /><Sub>Rejected by hand</Sub></> : PRE_LIVE.includes(l.action) ? <><span className="text-zinc-400">—</span><Sub>Judged once the link is live</Sub></> : <VerdictBadge v={l.verdict} />}{!!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[16rem] space-y-0.5"><Sub>{ruleLabel(l.rejectReasons[0])}</Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
-                  <td><div className="flex flex-col items-start gap-1"><StatusSelect link={l} onChanged={reload} /><StageBadge v={l.stage} /></div></td>
+                  <td>{l.action === "REJECTED" ? <><VerdictBadge v="Not relevant" /><Sub>Rejected by hand</Sub></>
+                    : PRE_LIVE.includes(l.action) ? <><span className="text-zinc-400">—</span><Sub>Judged once live</Sub></>
+                    : l.verdict === "Not judged" ? <span className="inline-flex items-center"><span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">Needs donor numbers</span><InfoTip text="This site has no DR or traffic numbers yet. Add them on the Donors page (Edit) or use Look up, then click Verify now." to="/guide#verdict" /></span>
+                    : <VerdictBadge v={l.verdict} />}
+                    {l.verdict !== "Not judged" && !PRE_LIVE.includes(l.action) && !!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[14rem] space-y-0.5"><Sub><span className="line-clamp-2">{ruleLabel(l.rejectReasons[0])}</span></Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
+                  <td><div className="flex flex-col items-start gap-1"><StatusSelect link={l} onChanged={reload} />{l.stage === "Confirmed" && <span title="Passed the 30-day recheck" className="rounded-md border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">✓ Confirmed</span>}</div></td>
                   <td><VerifBadge v={l.verificationStatus} />{PRE_LIVE.includes(l.action) && l.lastCheckedAt && <div className="mt-1 max-w-[14rem] text-xs text-zinc-500">Checked: the link isn't on the page yet</div>}{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
                   <td className="whitespace-nowrap text-zinc-600">{fmtDate(l.lastCheckedAt)}</td>
                   <td><div className="flex items-center gap-1">

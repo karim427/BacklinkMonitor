@@ -4,6 +4,7 @@ import { Badge, Button, Card, EmptyState, ErrorBanner, Progress, Skeleton } from
 import { post, useApi } from "@/lib/api";
 import { AdminOnly } from "@/lib/auth";
 import { currentMonth, monthLabel } from "@/lib/utils";
+import { InfoTip } from "@/components/InfoTip";
 import { Kpi, KpiRow, MonthPicker, PageHeader, RefreshButton, VerdictBadge } from "@/features/shared/common";
 
 export default function DashboardPage() {
@@ -42,10 +43,10 @@ export default function DashboardPage() {
         {loading && !d ? <Skeleton className="h-24 w-full" /> : (
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Target</p><p className="text-2xl font-semibold">{d?.target}</p><p className="text-[11px] text-zinc-500">{p?.remaining} still needed</p></Link>
-              <div title="Links planned but not placed yet"><p className="text-xs text-zinc-500">Pending</p><p className="text-2xl font-semibold text-zinc-600">{p?.pending}</p><p className="text-[11px] text-zinc-500">not placed yet</p></div>
-              <div title="Links placed and waiting to appear on the page"><p className="text-xs text-zinc-500">In progress</p><p className="text-2xl font-semibold text-amber-600">{p?.inProcess}</p><p className="text-[11px] text-zinc-500">waiting to go live</p></div>
-              <div title="Links found on the page. Relevant ones passed every check and count toward the target."><p className="text-xs text-zinc-500">Live</p><p className="text-2xl font-semibold text-green-600">{p?.live} <span className="text-sm font-normal text-zinc-500">{pct}% of target</span></p><p className="text-[11px] text-zinc-500">{p?.relevant} relevant (count toward target)</p></div>
+              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Target<InfoTip text="How many relevant links you want this month across all clients. Click the number to see each client." to="/guide#dashboard" /></p><p className="text-2xl font-semibold">{d?.target}</p><p className="text-[11px] text-zinc-500">{p?.remaining} still needed</p></Link>
+              <div title="Links planned but not placed yet"><p className="text-xs text-zinc-500">Pending<InfoTip text="Links you plan to get but have not placed yet." to="/guide#status" /></p><p className="text-2xl font-semibold text-zinc-600">{p?.pending}</p><p className="text-[11px] text-zinc-500">not placed yet</p></div>
+              <div title="Links placed and waiting to appear on the page"><p className="text-xs text-zinc-500">In progress<InfoTip text="Links placed and waiting to appear on the page. They are checked daily until they show up." to="/guide#status" /></p><p className="text-2xl font-semibold text-amber-600">{p?.inProcess}</p><p className="text-[11px] text-zinc-500">waiting to go live</p></div>
+              <div title="Links found on the page. Relevant ones passed every check and count toward the target."><p className="text-xs text-zinc-500">Live<InfoTip text="Links found on the page. Only the relevant ones (shown below) count toward the target." to="/guide#dashboard" /></p><p className="text-2xl font-semibold text-green-600">{p?.live} <span className="text-sm font-normal text-zinc-500">{pct}% of target</span></p><p className="text-[11px] text-zinc-500">{p?.relevant} relevant (count toward target)</p></div>
             </div>
             <Progress value={pct} className="mt-4" />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
@@ -63,7 +64,7 @@ export default function DashboardPage() {
       </KpiRow>
 
       <Card className="mb-6 p-5">
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Anchor mix compliance</h2>
+        <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Anchor mix compliance<InfoTip text="Keeps the clickable link text varied: not too many exact-keyword links. Out means that type is outside its target range." to="/guide#anchors" /></h2>
           <Badge tone={d?.anchorInBand === d?.anchorMix.length && d?.anchorMix.length ? "green" : "amber"}>{d?.anchorInBand ?? 0} / {d?.anchorMix.length ?? 0} in band</Badge></div>
         {!d?.anchorMix.length ? <EmptyState title="No anchor data yet" hint="Links assigned to a target page appear here (rolling 3 months)." /> : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

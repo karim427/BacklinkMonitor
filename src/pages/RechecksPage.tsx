@@ -4,7 +4,7 @@ import { Badge, Button, EmptyState, ErrorBanner } from "@/components/ui/primitiv
 import { post, useApi } from "@/lib/api";
 import { currentMonth, fmtDate } from "@/lib/utils";
 import { ClientChecks } from "@/features/rechecks/ClientChecks";
-import { DueText, MonthPicker, PageHeader, Panel, RefreshButton, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, Pager, usePaged } from "@/features/shared/common";
+import { DueText, MonthPicker, PageHeader, Panel, RefreshButton, Sub, Table, TableSkeleton, THead, VerdictBadge, Pager, usePaged } from "@/features/shared/common";
 import { cn } from "@/lib/utils";
 
 const TABS = ["due", "overdue", "d30", "d90", "all"] as const;
@@ -42,13 +42,13 @@ export default function RechecksPage() {
         </div>
         {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="Nothing in this queue" /> : (
           <Table>
-            <THead cols={["Client", "Donor", "Target URL", "Anchor", "Verdict", "Stage", "Placed", "Due kind", "Due", "Last checked", ""]} />
+            <THead cols={["Client", "Donor", "Target URL", "Anchor", "Verdict", "Placed", "Due kind", "Due", "Last checked", ""]} />
             <tbody>
               {pg.slice.map((l) => (
                 <tr key={l.id}>
                   <td className="font-medium">{l.client?.name}</td><td>{l.donor?.domain}</td>
                   <td className="max-w-48"><span className="block truncate text-xs">{l.targetUrl}</span></td><td>{l.anchorText}</td>
-                  <td><VerdictBadge v={l.verdict} /></td><td><StageBadge v={l.stage} /></td><td className="whitespace-nowrap">{fmtDate(l.placedAt)}</td>
+                  <td><VerdictBadge v={l.verdict} /></td><td className="whitespace-nowrap">{fmtDate(l.placedAt)}</td>
                   <td><Badge>{l.nextCheckKind}</Badge></td>
                   <td><div className="whitespace-nowrap">{fmtDate(l.nextCheckAt)}</div><DueText due={l.due} /></td>
                   <td className="whitespace-nowrap">{fmtDate(l.lastCheckedAt)}</td>

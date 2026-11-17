@@ -80,7 +80,7 @@ export const FilterBar = ({ children, onClear, dirty }: { children: React.ReactN
     {onClear && dirty && <Button variant="ghost" size="sm" className="justify-self-start" onClick={onClear}>Clear</Button>}
   </div>
 );
-export const THead = ({ cols }: { cols: string[] }) => (
+export const THead = ({ cols }: { cols: React.ReactNode[] }) => (
   <thead className="bg-zinc-50 text-left text-xs font-medium text-zinc-500">
     <tr>{cols.map((c, i) => <th key={i} className="whitespace-nowrap px-4 py-2.5">{c}</th>)}</tr>
   </thead>
