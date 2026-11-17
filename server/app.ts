@@ -7,10 +7,13 @@ import { extra } from "./routes/extra.js";
 import { runDueRechecks } from "./services/linkService.js";
 import { cronGuard, gate } from "./auth.js";
 import { auth, users } from "./routes/users.js";
+import { opportunities } from "./routes/opportunities.js";
+import { haroInbox } from "./routes/haroInbox.js";
 
 export const app = express();
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false, limit: "5mb" })); // forms posted by email-forwarding services
 
 const misc = Router();
 misc.get("/cron/recheck", cronGuard, async (_req, res, next) => {
@@ -18,7 +21,7 @@ misc.get("/cron/recheck", cronGuard, async (_req, res, next) => {
 });
 misc.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.use("/api", gate, auth, users, misc, core, extra);
+app.use("/api", gate, auth, users, misc, core, extra, opportunities, haroInbox);
 app.use("/api", (_req, res) => res.status(404).json({ error: { message: "Not found" } }));
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) return res.status(400).json({ error: { message: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "), issues: err.issues } });

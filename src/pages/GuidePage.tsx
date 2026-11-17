@@ -65,6 +65,13 @@ const SECTIONS: Section[] = [
     ["Fix window", "14 days to fix a Partly relevant link before it counts as Not relevant."],
     ["The daily run", "Vercel runs it at 06:00 UTC. Admins can also click Run due rechecks."],
   ] },
+  { id: "outreach", title: "Finding new links: Opportunities, Prospects and HARO", items: [
+    ["Opportunities", "Pick a client and list its competitors. The app asks Ahrefs who links to those competitors but not to your client, ranks the sites by how many competitors they link to, and lets you send the best ones to Prospects. Each run uses Ahrefs units (one request per site)."],
+    ["Prospects", "Sites worth contacting. They come from searches, from Opportunities, or are added by hand. Move them through New, Shortlisted, Contacted, Won or Rejected."],
+    ["HARO / journalist requests", "Journalists ask for expert quotes. Sign up to a service that emails them (Featured.com, Qwoted, Source of Sources, Help a B2B Writer), then use Connect inbox to forward those emails here, or paste one with Import email. A daily email with many requests is split into one entry each."],
+    ["Match and draft", "For each request the app ranks which of your clients fits and drafts a reply. Always read and edit the draft before sending."],
+    ["Sample data", "Settings > Sample data lists the made-up clients, donors and links that came with the app (on fake .example addresses) so you can remove them. Real data is never touched."],
+  ] },
   { id: "data", title: "Import, export and people", items: [
     ["Import CSV", "Columns it understands: Client, Link from, Link to, Anchor text, Anchor type, Placement, Name, Placed date, Status. Names can be written loosely. Imported links stay 'Not judged' until you verify them."],
     ["Export", "Choose a month, a client, a status, the columns, and the exact links, then download a CSV for Excel or Google Sheets."],

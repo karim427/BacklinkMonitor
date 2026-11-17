@@ -64,7 +64,7 @@ export function permission(role: Role, method: string, path: string): { allowed:
 /** Gate every /api route except /auth/*, /cron/* (own secret) and /health. */
 export async function gate(req: Request, res: Response, next: NextFunction) {
   try {
-    if (req.path.startsWith("/auth/") || req.path.startsWith("/cron/") || req.path === "/health") return next();
+    if (req.path.startsWith("/auth/") || req.path.startsWith("/cron/") || req.path === "/health" || req.path.startsWith("/haro/inbound/")) return next();
     const user = await resolveUser(req);
     if (!user) return res.status(401).json({ error: { message: "Unauthorized" } });
     req.user = user;

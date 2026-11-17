@@ -13,6 +13,7 @@ import { ahrefsStatus, checkAhrefsKey, getAhrefsKey, setAhrefsKey } from "../ser
 import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { autoLookupEnabled } from "../services/donorMetrics.js";
 import { listLost, refreshLost } from "../services/ahrefsLost.js";
+import { previewDemoData, removeDemoData } from "../services/demoData.js";
 
 export const core = Router();
 
@@ -329,6 +330,12 @@ core.get("/lost-links", wrap(async (req) => {
 core.post("/lost-links/refresh", wrap(async (req) => {
   const b = z.object({ clientId: z.number().int().optional(), days: z.number().int().min(1).max(365).optional() }).parse(req.body ?? {});
   try { return await refreshLost(b); } catch (e) { throw new HttpError(400, (e as Error).message); }
+}));
+/** Sample data from the seed (reserved .example addresses). Admin-only to remove; the preview shows exactly what would go. */
+core.get("/demo-data", wrap(async () => previewDemoData()));
+core.post("/demo-data/remove", wrap(async (req) => {
+  z.object({ confirm: z.literal(true) }).parse(req.body);
+  return removeDemoData();
 }));
 core.get("/rechecks/summary", wrap(async (req) => {
   const month = monthParam(req);

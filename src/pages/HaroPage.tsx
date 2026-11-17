@@ -4,6 +4,8 @@ import { Dialog } from "@/components/ui/overlays";
 import { post, put, useApi } from "@/lib/api";
 import { cn, daysUntil, toDateInput } from "@/lib/utils";
 import { PageHeader, RefreshButton, Sub, TableSkeleton } from "@/features/shared/common";
+import { AdminOnly } from "@/lib/auth";
+import { HaroConnectDialog, HaroImportDialog } from "@/features/haro/HaroInboxDialogs";
 
 const TABS = ["All", "New", "Matched", "Drafted", "Responded", "Expired", "Rejected"];
 const tone = (s: string) => ({ New: "blue", Matched: "blue", Drafted: "amber", Responded: "green", Expired: "neutral", Rejected: "red" } as any)[s] ?? "neutral";
@@ -12,7 +14,7 @@ const EXAMPLE = `Summary: Looking for real-estate pros on selling an inherited h
 export default function HaroPage() {
   const { data, error, loading, reload } = useApi("/haro");
   const [tab, setTab] = useState("All"); const [q, setQ] = useState(""); const [client, setClient] = useState("");
-  const [sel, setSel] = useState<number | null>(null); const [newOpen, setNewOpen] = useState(false); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState<string | null>(null);
+  const [sel, setSel] = useState<number | null>(null); const [newOpen, setNewOpen] = useState(false); const [importOpen, setImportOpen] = useState(false); const [connectOpen, setConnectOpen] = useState(false); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState<string | null>(null);
   const [raw, setRaw] = useState(""); const [ov, setOv] = useState({ outlet: "", journalist: "", deadline: "" }); const [pre, setPre] = useState("");
   const [draftClient, setDraftClient] = useState(""); const fileRef = useRef<HTMLInputElement>(null);
   const clients: any[] = data?.clients ?? []; const all: any[] = data?.rows ?? [];
@@ -28,13 +30,13 @@ export default function HaroPage() {
   const draftText = edited[`${cur?.id}-${draftClient}`] ?? resp?.draft ?? "";
   return (
     <>
-      <PageHeader title="HARO" description="Parse journalist requests, rank matching clients, draft expert responses." actions={<><RefreshButton onClick={reload} loading={loading} /><Button onClick={() => { setPre(""); setNewOpen(true); }}>New request</Button></>} />
+      <PageHeader title="HARO" description="Journalist requests that need an expert quote: match them to clients and draft replies. Use Connect inbox to bring them in automatically." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" onClick={() => setConnectOpen(true)}>Connect inbox</Button><Button variant="outline" onClick={() => setImportOpen(true)}>Import email</Button></AdminOnly><Button onClick={() => { setPre(""); setNewOpen(true); }}>New request</Button></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="overflow-hidden lg:col-span-2">
           <div className="flex flex-wrap gap-1 border-b border-zinc-200 p-2">{TABS.map((t) => <button key={t} onClick={() => setTab(t)} className={cn("rounded-md px-2.5 py-1 text-xs", tab === t ? "bg-black text-white" : "hover:bg-zinc-100")}>{t} {t === "All" ? all.length : all.filter((r) => r.status === t).length}</button>)}</div>
           <div className="flex gap-2 border-b border-zinc-200 p-2"><Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} /><Select className="w-36" value={client} onChange={setClient} placeholder="All clients" options={clients.map((c) => ({ value: c.id, label: c.name }))} /></div>
-          {loading && !data ? <TableSkeleton rows={4} /> : !rows.length ? <EmptyState title="No requests" hint="Paste a HARO email with “New request”." /> : rows.map((r) => (
+          {loading && !data ? <TableSkeleton rows={4} /> : !rows.length ? <EmptyState title="No requests" hint="Click Connect inbox to get them automatically, or Import email to paste one." /> : rows.map((r) => (
             <button key={r.id} onClick={() => setSel(r.id)} className={cn("block w-full border-b border-zinc-100 p-3 text-left hover:bg-zinc-50", sel === r.id && "bg-zinc-50")}>
               <div className="flex items-start justify-between gap-2"><span className="text-sm font-medium">{r.title ?? "Untitled"}</span><Badge tone={tone(r.status)}>{r.status}</Badge></div>
               <Sub>{r.outlet} · {r.journalist}</Sub><Sub>{r.category ?? "—"} · {r.responses?.length ?? 0} response(s) · deadline {r.deadline ? daysUntil(r.deadline) : "—"}</Sub>
@@ -62,6 +64,7 @@ export default function HaroPage() {
           )}
         </Card>
       </div>
+      <HaroImportDialog open={importOpen} onOpenChange={setImportOpen} onDone={reload} /><HaroConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
       <Dialog open={newOpen} onOpenChange={setNewOpen} wide title="New HARO request" description="Paste the raw email. If AI is unavailable a rule-based parser is used.">
         <div className="space-y-3">
           <div><Textarea rows={8} maxLength={20000} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Paste HARO email…" /><div className="mt-1 flex items-center justify-between text-xs text-zinc-500"><span>{raw.length} / 20,000</span>

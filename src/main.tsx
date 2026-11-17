@@ -16,6 +16,7 @@ const HaroPage = lazy(() => import("./pages/HaroPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const UsersPage = lazy(() => import("./pages/UsersPage"));
 const GuidePage = lazy(() => import("./pages/GuidePage"));
+const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage"));
 import { AuthGate } from "./components/AuthGate";
 import { RouteBoundary } from "./components/RouteBoundary";
 
@@ -40,6 +41,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="settings" element={<SettingsPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="guide" element={<GuidePage />} />
+          <Route path="opportunities" element={<OpportunitiesPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes></Suspense></RouteBoundary>
