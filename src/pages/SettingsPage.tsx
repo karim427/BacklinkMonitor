@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Badge, Button, Card, ErrorBanner, Field, Input } from "@/components/ui/primitives";
 import { ClientDialog } from "@/features/clients/ClientDialog";
 import { ConfirmDialog, RowMenu } from "@/components/ui/overlays";
@@ -13,6 +14,7 @@ export default function SettingsPage() {
   const { data, error, reload } = useApi("/settings"); const { data: cl, reload: reloadClients } = useApi("/clients");
   const [s, setS] = useState<any>(DEFAULT_SETTINGS); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ c: any } | null>(null); const [delT, setDelT] = useState<any>(null); const [syncing, setSyncing] = useState(false);
+  const [openCluster, setOpenCluster] = useState<Record<string, boolean>>({});
   useEffect(() => { if (data) setS(data.settings); }, [data]);
   const save = async (body: any, label: string) => { setErr(null); setMsg(null); try { await put("/settings", body); setMsg(`${label} saved.`); reload(); } catch (e: any) { setErr(e.message); } };
   const band = (k: string, side: "min" | "max", v: number) => setS({ ...s, anchorBands: { ...s.anchorBands, [k]: { ...s.anchorBands[k], [side]: v } } });
@@ -28,12 +30,17 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between p-4"><h2 className="text-sm font-semibold">Clients &amp; clusters</h2><Button size="sm" onClick={() => setEdit({ c: null })}>Add client</Button></div>
         {CLUSTERS.map((c) => (
           <div key={c} className="border-t border-zinc-200">
-            <div className="bg-zinc-50 px-4 py-2"><span className="text-sm font-medium">{c}</span><span className="ml-2 text-xs text-zinc-500">Niches: {CLUSTER_NICHES[c].join(", ")}</span></div>
-            <Table><THead cols={["Client", "City / state", "Cash buyer", "Monthly target", "GBP", ""]} /><tbody>
+            <button type="button" aria-expanded={!!openCluster[c]} onClick={() => setOpenCluster({ ...openCluster, [c]: !openCluster[c] })}
+              className="flex w-full items-center gap-2 bg-zinc-50 px-4 py-3 text-left hover:bg-zinc-100">
+              <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${openCluster[c] ? "" : "-rotate-90"}`} />
+              <span className="text-sm font-medium">{c}</span><Badge>{clients.filter((x) => x.cluster === c).length}</Badge>
+              <span className="ml-1 hidden truncate text-xs text-zinc-500 sm:inline">Niches: {CLUSTER_NICHES[c].join(", ")}</span>
+            </button>
+            {openCluster[c] && <Table><THead cols={["Client", "City / state", "Cash buyer", "Monthly target", "GBP", ""]} /><tbody>
               {clients.filter((x) => x.cluster === c).map((x) => { const g = [x.gbpName, x.gbpAddress, x.gbpPhone].filter(Boolean).length; return (
                 <tr key={x.id}><td><div className="font-medium">{x.name}</div><div className="text-xs text-zinc-500">{x.domain} · {x.slug}</div></td><td>{x.city}{x.state && `, ${x.state}`}</td><td>{x.isCashBuyer ? "Yes" : "No"}</td><td>{x.defaultMonthlyTarget}</td>
                   <td><Badge tone={g === 3 ? "green" : "amber"}>GBP {g}/3</Badge></td><td><RowMenu items={[{ label: "Edit", onSelect: () => setEdit({ c: x }) }, { label: "Delete", danger: true, onSelect: () => setDelT(x) }]} /></td></tr>); })}
-            </tbody></Table>
+            </tbody></Table>}
           </div>
         ))}
       </Card>
