@@ -40,7 +40,7 @@ export function AppShell() {
     <div className="flex h-dvh overflow-hidden">
       <aside className={cn("fixed inset-y-0 left-0 z-30 flex h-dvh w-60 shrink-0 flex-col bg-black text-white transition-[transform,width] lg:static lg:translate-x-0", collapsed && "lg:w-16", open ? "translate-x-0" : "-translate-x-full")}>
         <div className={cn("flex items-center justify-between px-5 py-5", collapsed && "lg:flex-col lg:gap-3 lg:px-2")}>
-          <div className={cn(collapsed && "lg:hidden")}><div className="text-base font-semibold">Backlink Verify</div><div className="text-xs text-zinc-400">QA workspace</div></div>
+          <NavLink to="/" onClick={() => setOpen(false)} className={cn("block", collapsed && "lg:hidden")}><div className="text-base font-semibold">Backlink Verify</div><div className="text-xs text-zinc-400">QA workspace</div></NavLink>
           <button className="lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button>
           <button className="hidden rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white lg:block" aria-label={collapsed ? "Expand menu" : "Collapse menu"} title={collapsed ? "Expand menu" : "Collapse menu"} onClick={toggleCollapsed}>
             {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
@@ -68,7 +68,7 @@ export function AppShell() {
         <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 lg:px-8">
           <div className="flex items-center gap-3">
             <button className="lg:hidden" aria-label="Open menu" onClick={() => setOpen(true)}><Menu className="h-5 w-5" /></button>
-            <div className="text-sm text-zinc-500">Backlink Verify <span className="mx-1">/</span> <span className="font-medium text-zinc-900">{current}</span></div>
+            <div className="text-sm text-zinc-500"><NavLink to="/" className="hover:text-zinc-900 hover:underline">Backlink Verify</NavLink> <span className="mx-1">/</span> <span className="font-medium text-zinc-900">{current}</span></div>
           </div>
           <Button onClick={() => nav("/links?new=1")}><Plus className="h-4 w-4" />Add link</Button>
         </header>
