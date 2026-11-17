@@ -17,10 +17,13 @@ describe("links export", () => {
     expect(csv[0]).toBe('"Client","Month","Anchor text","Status"');
     expect(csv[1]).toBe('"St Pete","December 2026","we buy ""St. Pete"" houses","In process"');
   });
-  it("shows plain-language problems, no internal codes, and doesn't invent a DR for a donor never looked up", () => {
+  it("has no donor columns", () => {
+    expect(COLUMNS.map((c) => c.key).filter((k) => /donor|dr/i.test(k))).toEqual([]);
+    expect(COLUMNS.map((c) => c.label).join(" ")).not.toMatch(/donor/i);
+  });
+  it("shows plain-language problems, no internal codes", () => {
     const get = (k: string) => COLUMNS.find((c) => c.key === k)!.get(link);
     expect(get("reasons")).toBe("Link in footer, sidebar or author bio");
-    expect(get("dr")).toBe("");
     expect(get("verdict")).toBe("Not live yet");
     expect(get("notes")).toBe('=HYPERLINK("http://evil")'); // neutralised later, by csvCell
   });

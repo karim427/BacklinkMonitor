@@ -15,8 +15,6 @@ export const COLUMNS: ExportColumn[] = [
   { key: "status", label: "Status", get: (l) => STATUS_LABEL[l.action] ?? l.action, on: true },
   { key: "addedBy", label: "Added by", get: (l) => l.reviewer, on: true },
   { key: "placed", label: "Placed date", get: (l) => day(l.placedAt), on: true },
-  { key: "dr", label: "Donor DR", get: (l) => (l.donor && (l.donor.dr || l.donor.ahrefsSyncedAt) ? l.donor.dr : ""), on: true },
-  { key: "donor", label: "Donor site", get: (l) => l.donor?.domain, on: false },
   { key: "anchorType", label: "Anchor type", get: (l) => l.anchorType, on: false },
   { key: "verdict", label: "Verdict", get: (l) => (PRE_LIVE.includes(l.action) ? "Not live yet" : l.verdict === "Not judged" ? "Needs donor numbers" : l.verdict), on: false },
   { key: "reasons", label: "Problems found", get: (l) => (l.rejectReasons ?? []).map(ruleLabel).join("; "), on: false },

@@ -16,6 +16,9 @@ export function ExportDialog({ open, onOpenChange, links, defaultClient = "", de
   const matching = useMemo(() => links.filter((l) => (!client || String(l.clientId) === client) && (!month || l.month === month) && (!status || l.action === status))
     .sort((a, b) => (a.client?.name ?? "").localeCompare(b.client?.name ?? "") || b.month.localeCompare(a.month)), [links, client, month, status]);
   const chosen = matching.filter((l) => !off.has(l.id)); const columns = COLUMNS.filter((c) => cols[c.key]);
+  // Links grouped by client, newest month first, so each client can be ticked or unticked as a whole.
+  const byClient = useMemo(() => { const m = new Map<string, any[]>(); for (const l of matching) { const k = l.client?.name ?? "Unknown"; m.set(k, [...(m.get(k) ?? []), l]); } return [...m.entries()]; }, [matching]);
+  const setClientOff = (ls: any[], allOn: boolean) => setOff((p) => { const n = new Set(p); ls.forEach((l) => (allOn ? n.add(l.id) : n.delete(l.id))); return n; });
   const toggle = (id: number) => setOff((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   function download() {
@@ -41,10 +44,19 @@ export function ExportDialog({ open, onOpenChange, links, defaultClient = "", de
         <div>
           <div className="mb-1 flex items-center justify-between"><p className="text-xs font-medium text-zinc-600">Links ({chosen.length} of {matching.length} selected)</p>
             <span className="text-xs"><button type="button" className="text-blue-600 hover:underline" onClick={() => setOff(new Set())}>All</button> · <button type="button" className="text-blue-600 hover:underline" onClick={() => setOff(new Set(matching.map((l) => l.id)))}>None</button></span></div>
-          <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-2">
-            {!matching.length ? <p className="p-2 text-sm text-zinc-500">No links match these choices.</p> : matching.map((l) => (
-              <label key={l.id} className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={!off.has(l.id)} onChange={() => toggle(l.id)} />
-                <span className="min-w-0"><span className="block truncate">{l.donor?.domain ?? l.sourceUrl}</span><span className="block truncate text-xs text-zinc-500">{l.client?.name} · {monthLabel(l.month)} · {STATUS_LABEL[l.action] ?? l.action}</span></span></label>))}
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-2">
+            {!matching.length ? <p className="p-2 text-sm text-zinc-500">No links match these choices.</p> : byClient.map(([name, ls]) => {
+              const on = ls.filter((l) => !off.has(l.id)).length;
+              return (
+                <div key={name}>
+                  <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={on === ls.length} ref={(el) => { if (el) el.indeterminate = on > 0 && on < ls.length; }} onChange={() => setClientOff(ls, on === ls.length)} />{name} <span className="text-xs font-normal text-zinc-500">{on}/{ls.length}</span></label>
+                  <div className="ml-6 mt-1 space-y-1">
+                    {ls.map((l) => (
+                      <label key={l.id} className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={!off.has(l.id)} onChange={() => toggle(l.id)} />
+                        <span className="min-w-0"><span className="block truncate">{l.anchorText || l.targetUrl}</span><span className="block truncate text-xs text-zinc-500">{month ? "" : `${monthLabel(l.month)} · `}{STATUS_LABEL[l.action] ?? l.action}</span></span></label>))}
+                  </div>
+                </div>);
+            })}
           </div>
         </div>
       </div>
