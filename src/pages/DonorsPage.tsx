@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner, Field, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Dialog, Drawer } from "@/components/ui/overlays";
@@ -60,7 +61,7 @@ export default function DonorsPage() {
   async function sync() { setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(`Synced ${r.synced}/${r.total} donors${r.mock ? " (mock data — no AHREFS_API_KEY set)" : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
   return (
     <>
-      <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Syncing…" : "Sync from Ahrefs"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></>} />
+      <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Syncing…" : "Sync from Ahrefs"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       {msg && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">{msg}</div>}
       <KpiRow><Kpi label="Donors" value={t?.donors} loading={loading} /><Kpi label="Average DR" value={t?.avgDr} loading={loading} /><Kpi label="Local donors" value={t?.local} loading={loading} /><Kpi label="Reuse warnings" value={t?.reuseWarnings} tone="amber" loading={loading} /></KpiRow>
@@ -80,7 +81,7 @@ export default function DonorsPage() {
                 <td>{r.localArea ?? "—"}</td>
                 <td><Badge tone={r.reuseWarning ? "amber" : "neutral"}>{r.clientsLinked} / 3</Badge>{r.reuseForPreview && <Sub>reused &lt; 6 mo</Sub>}</td>
                 <td>{fmtDate(r.lastUsedAt)}</td>
-                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></td></tr>
+                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <AdminOnly><Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></AdminOnly></td></tr>
             ))}</tbody></Table>
         )}
         <Pager p={pg} />

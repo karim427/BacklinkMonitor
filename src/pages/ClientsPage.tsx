@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/lib/auth";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge, Button, EmptyState, ErrorBanner, Input } from "@/components/ui/primitives";
@@ -17,7 +18,7 @@ export default function ClientsPage() {
     <>
       <PageHeader title="Clients" description="Target backlinks vs. relevant links received, per client and month." actions={<>
         <MonthPicker month={month} onChange={setMonth} /><RefreshButton onClick={reload} loading={loading} />
-        <Button variant="outline" onClick={() => setAdding(true)}>Add website</Button>
+        <AdminOnly><Button variant="outline" onClick={() => setAdding(true)}>Add website</Button></AdminOnly>
       </>} />
       {error && <div className="mb-4"><ErrorBanner message={error} onRetry={reload} /></div>}
       <KpiRow cols={5}>

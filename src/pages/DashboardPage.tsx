@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Dialog } from "@/components/ui/overlays";
-import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input, Progress, Skeleton } from "@/components/ui/primitives";
-import { post, put, useApi } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, ErrorBanner, Progress, Skeleton } from "@/components/ui/primitives";
+import { post, useApi } from "@/lib/api";
+import { AdminOnly } from "@/lib/auth";
 import { currentMonth, monthLabel } from "@/lib/utils";
 import { Kpi, KpiRow, MonthPicker, PageHeader, RefreshButton, VerdictBadge } from "@/features/shared/common";
 
@@ -10,14 +10,11 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(currentMonth());
   const { data: d, error, loading, reload } = useApi(`/dashboard?month=${month}`);
   const nav = useNavigate();
-  const [editing, setEditing] = useState(false); const [val, setVal] = useState(""); const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const p = d?.progress;
   const pct = p && d.target ? Math.round((p.relevant / d.target) * 100) : 0;
 
-  async function saveTarget(reset = false) {
-    try { await put("/dashboard/target", { month, target: reset ? null : Number(val) }); setEditing(false); reload(); } catch (e: any) { setErr(e.message); }
-  }
   async function runDue() { setRunning(true); try { await post("/rechecks/run-due"); reload(); } catch (e: any) { setErr(e.message); } finally { setRunning(false); } }
 
   return (
@@ -25,14 +22,14 @@ export default function DashboardPage() {
       <PageHeader title="Dashboard" description="Monthly progress, anchor mix compliance and rechecks across every client." actions={<>
         <MonthPicker month={month} onChange={setMonth} /><RefreshButton onClick={reload} loading={loading} />
         <Button variant="outline" onClick={() => nav("/links")}>Open links</Button>
-        <Button onClick={runDue} disabled={running}>{running ? "Running…" : "Run due rechecks →"}</Button>
+        <AdminOnly><Button onClick={runDue} disabled={running}>{running ? "Running…" : "Run due rechecks →"}</Button></AdminOnly>
       </>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
 
       <Card className="mb-6 p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2"><h2 className="text-sm font-semibold">Monthly target</h2>{d?.recurringDefault && <Badge>Recurring default</Badge>}</div>
-          <Button size="sm" variant="outline" onClick={() => { setVal(String(d?.target ?? 0)); setErr(null); setEditing(true); }}>Edit target</Button>
+          <AdminOnly><Button size="sm" variant="outline" asChild><Link to="/clients" title="Targets are set per client and month">Edit target</Link></Button></AdminOnly>
         </div>
         {loading && !d ? <Skeleton className="h-24 w-full" /> : (
           <>
@@ -105,11 +102,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Dialog open={editing} onOpenChange={setEditing} title={`Target for ${monthLabel(month)}`} description="Workspace-wide relevant-link target for this month.">
-        <Field label="Monthly target"><Input type="number" min={0} value={val} onChange={(e) => setVal(e.target.value)} /></Field>
-        <div className="mt-4 flex justify-between"><Button variant="ghost" onClick={() => saveTarget(true)}>Use recurring default</Button>
-          <div className="flex gap-2"><Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button><Button onClick={() => saveTarget()}>Save</Button></div></div>
-      </Dialog>
     </>
   );
 }

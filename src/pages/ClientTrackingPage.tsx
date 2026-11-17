@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/lib/auth";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input } from "@/components/ui/primitives";
@@ -23,7 +24,7 @@ export default function ClientTrackingPage() {
   return (
     <>
       <PageHeader title={drill ? `${c.name} · ${monthLabel(drill)}` : c.name} description={`${c.domain} · ${c.cluster}${c.city ? ` · ${c.city}, ${c.state}` : ""} · Default target ${c.defaultMonthlyTarget} / month`}
-        actions={<><Button variant="outline" onClick={() => setEdit({ month: months[0].month, target: c.defaultMonthlyTarget })}>Add month target</Button>
+        actions={<><AdminOnly><Button variant="outline" onClick={() => setEdit({ month: months[0].month, target: c.defaultMonthlyTarget })}>Add month target</Button></AdminOnly>
           <Button variant="outline" asChild><Link to="/target-links">View target links</Link></Button>
           {drill && <Button variant="ghost" onClick={() => nav(`/clients/${id}`)}>← All months</Button>}</>} />
       {err && <div className="mb-4"><ErrorBanner message={err} /></div>}
@@ -42,7 +43,7 @@ export default function ClientTrackingPage() {
                 <td><Link className="font-medium hover:underline" to={`/clients/${id}/${m.month}`}>{monthLabel(m.month)}</Link></td>
                 <td>{m.status !== "Past" && <Badge tone={m.status === "Current" ? "blue" : "neutral"}>{m.status}</Badge>}</td>
                 <td>{m.target} {m.overridden && <Sub>override</Sub>}</td><td className="text-blue-600">{m.received}</td><td>{m.remaining}</td>
-                <td><Button size="sm" variant="ghost" onClick={() => setEdit({ month: m.month, target: m.target })}>Edit</Button></td>
+                <td><AdminOnly><Button size="sm" variant="ghost" onClick={() => setEdit({ month: m.month, target: m.target })}>Edit</Button></AdminOnly></td>
               </tr>
             ))}
           </tbody>

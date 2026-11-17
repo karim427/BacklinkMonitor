@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner, Field, Input, Select } from "@/components/ui/primitives";
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
@@ -49,7 +50,7 @@ export default function TargetPagesPage() {
   const dirty = Object.values(f).some(Boolean);
   return (
     <>
-      <PageHeader title="Target pages" description="Stage 1 — approve pages whose RD gap closes in ≤ 6 months." actions={<><RefreshButton onClick={reload} loading={loading} /><Button onClick={() => setDlg({ row: null })}>Add target page</Button></>} />
+      <PageHeader title="Target pages" description="Stage 1 — approve pages whose RD gap closes in ≤ 6 months." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button onClick={() => setDlg({ row: null })}>Add target page</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       <KpiRow><Kpi label="Approved" value={t?.approved} tone="green" loading={loading} /><Kpi label="Pending" value={t?.pending} tone="amber" loading={loading} /><Kpi label="Rejected" value={t?.rejected} tone="red" loading={loading} /><Kpi label="Links needed" value={t?.linksNeeded} loading={loading} /></KpiRow>
       <Panel>
@@ -64,7 +65,7 @@ export default function TargetPagesPage() {
             <tbody>{pg.slice.map((r) => (
               <tr key={r.id}><td className="font-medium">{r.client?.name}</td><td className="max-w-64"><div>{r.keyword}</div><Sub><span className="block truncate">{r.url}</span></Sub></td>
                 <td>{r.rdsNeeded}</td><td>{r.linksNeeded}</td><td>{r.monthsToClose}</td><td><Badge tone={tone(r.status)}>{r.status}</Badge></td><td>{r.approvalMonth ?? "—"}</td>
-                <td><RowMenu items={[{ label: "Approve", onSelect: () => setStatus(r, "Approved"), hidden: r.status === "Approved" }, { label: "Reject", onSelect: () => setStatus(r, "Rejected"), hidden: r.status === "Rejected" }, { label: "Edit", onSelect: () => setDlg({ row: r }) }, { label: "Delete", danger: true, onSelect: () => setDelT(r) }]} /></td></tr>
+                <td><AdminOnly><RowMenu items={[{ label: "Approve", onSelect: () => setStatus(r, "Approved"), hidden: r.status === "Approved" }, { label: "Reject", onSelect: () => setStatus(r, "Rejected"), hidden: r.status === "Rejected" }, { label: "Edit", onSelect: () => setDlg({ row: r }) }, { label: "Delete", danger: true, onSelect: () => setDelT(r) }]} /></AdminOnly></td></tr>
             ))}</tbody></Table>
         )}
         <Pager p={pg} />

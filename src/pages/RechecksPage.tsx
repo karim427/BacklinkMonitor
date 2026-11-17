@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/lib/auth";
 import { useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner } from "@/components/ui/primitives";
 import { post, useApi } from "@/lib/api";
@@ -20,7 +21,7 @@ export default function RechecksPage() {
   async function run(id?: number) { setBusy(id ?? "all"); setErr(null); try { id ? await post(`/links/${id}/verify`) : await post("/rechecks/run-due"); reload(); } catch (e: any) { setErr(e.message); } finally { setBusy(null); } }
   return (
     <>
-      <PageHeader title="Rechecks" description="First recheck 30 days after placement, then every 90 days." actions={<><RefreshButton onClick={reload} loading={loading} /><Button disabled={busy === "all"} onClick={() => run()}>{busy === "all" ? "Running…" : "Run all due"}</Button></>} />
+      <PageHeader title="Rechecks" description="First recheck 30 days after placement, then every 90 days." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button disabled={busy === "all"} onClick={() => run()}>{busy === "all" ? "Running…" : "Run all due"}</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       {!!data?.domains.length && (
         <div className="mb-4 flex flex-wrap items-center gap-2"><span className="text-sm text-zinc-500">Domains to recheck:</span>

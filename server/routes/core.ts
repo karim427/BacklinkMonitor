@@ -228,16 +228,16 @@ core.get("/links/:id", wrap(async (req) => {
   if (!l) throw new HttpError(404, "Link not found");
   return { ...l, checkRuns: (await db.select().from(s.checkRuns).where(eq(s.checkRuns.linkId, l.id)).orderBy(desc(s.checkRuns.ranAt))) };
 }));
-async function createLink(b: z.infer<typeof linkBody>) {
+async function createLink(b: z.infer<typeof linkBody>, userId?: number) {
   const donorId = await resolveDonor(b, b.clientId);
   const placedAt = b.placedAt ? new Date(b.placedAt) : null;
   const { autoVerify, donorDomain, donorId: _d, ...rest } = b;
-  const values = { ...rest, donorId, placedAt, ...(placedAt ? await scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
+  const values = { ...rest, donorId, placedAt, createdBy: userId || null, ...(placedAt ? await scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
   const row = (await db.insert(s.links).values(values).returning())[0];
   if (autoVerify) return runVerification(row.id);
   return row;
 }
-core.post("/links", wrap(async (req, res) => { res.status(201); return createLink(linkBody.parse(req.body)); }));
+core.post("/links", wrap(async (req, res) => { res.status(201); return createLink(linkBody.parse(req.body), req.user?.id); }));
 core.put("/links/:id", wrap(async (req) => {
   const id = idOf(req); const b = linkBody.partial().parse(req.body);
   const { autoVerify, donorDomain, ...rest } = b;
@@ -277,7 +277,7 @@ core.post("/links/import", wrap(async (req) => {
       anchorType: get("anchorType") ?? "Natural", placement: get("placement") ?? "Unknown", reviewer: get("reviewer"), placedAt: get("placedAt"),
     });
     if (!parsed.success) { result.errors.push({ row: i + 2, error: c ? parsed.error.issues[0].path.join(".") + ": " + parsed.error.issues[0].message : `Unknown client "${get("client")}"` }); continue; }
-    await createLink(parsed.data); result.created++;
+    await createLink(parsed.data, req.user?.id); result.created++;
   }
   return result;
 }));

@@ -4,6 +4,27 @@ const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" 
 const created = () => ts("created_at").notNull().$defaultFn(() => new Date());
 const json = <T>(name: string) => jsonb(name).$type<T>();
 
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  role: text("role").notNull().default("user"), // "admin" | "user"
+  active: boolean("active").notNull().default(true),
+  invitedBy: integer("invited_by"),
+  lastLoginAt: ts("last_login_at"),
+  createdAt: created(),
+});
+
+export const loginCodes = pgTable("login_codes", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  codeHash: text("code_hash").notNull(),
+  expiresAt: ts("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  usedAt: ts("used_at"),
+  createdAt: created(),
+});
+
 export const clients = pgTable("clients", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -68,6 +89,7 @@ export const links = pgTable("links", {
   anchorText: text("anchor_text").notNull().default(""),
   anchorType: text("anchor_type").notNull().default("Natural"),
   placement: text("placement").notNull().default("Unknown"),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
   reviewer: text("reviewer"), placedAt: ts("placed_at"), notes: text("notes"),
   verdict: text("verdict").notNull().default("Partly relevant"),
   stage: text("stage").notNull().default("Intake"),
