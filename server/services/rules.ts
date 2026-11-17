@@ -6,7 +6,7 @@ import {
 const DAY = 86_400_000;
 
 /* ---------- Counting toward target ---------- */
-export interface CountableLink { verdict: Verdict; placedAt?: Date | string | null; createdAt: Date | string }
+export interface CountableLink { verdict: Verdict; action?: string | null; placedAt?: Date | string | null; createdAt: Date | string }
 export const monthKey = (d: Date | string) => {
   const x = typeof d === "string" ? new Date(d) : d;
   return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -17,9 +17,15 @@ export const linkMonth = (l: CountableLink) => monthKey(l.placedAt ?? l.createdA
 export function targetProgress(links: CountableLink[], month: string, target: number) {
   const inMonth = links.filter((l) => linkMonth(l) === month);
   const relevant = inMonth.filter((l) => l.verdict === "Relevant").length;
-  const pending = inMonth.filter((l) => l.verdict === "Partly relevant" || l.verdict === "Not judged").length;
+  // Pending = links we are still waiting to get live (status Pending or In process). Live-but-fixable links are counted separately as "fixing".
+  const notLiveYet = (l: CountableLink) => l.action === "PENDING" || l.action === "IN_PROCESS";
+  const pending = inMonth.filter((l) => l.action === "PENDING").length;      // planned, not placed yet
+  const inProcess = inMonth.filter((l) => l.action === "IN_PROCESS").length; // placed, waiting to appear
+  const live = inMonth.filter((l) => l.action === "LIVE").length;            // on the page ("relevant" is the subset that passed every check)
+  const fixing = inMonth.filter((l) => !notLiveYet(l) && l.verdict === "Partly relevant").length;
+  const needsDonorNumbers = inMonth.filter((l) => !notLiveYet(l) && l.verdict === "Not judged").length;
   const rejected = inMonth.filter((l) => l.verdict === "Not relevant").length;
-  return { received: inMonth.length, relevant, pending, rejected, remaining: Math.max(0, target - relevant), target };
+  return { received: inMonth.length, relevant, pending, inProcess, live, fixing, needsDonorNumbers, rejected, remaining: Math.max(0, target - relevant), target };
 }
 
 /* ---------- Stage 1: target page approval ---------- */

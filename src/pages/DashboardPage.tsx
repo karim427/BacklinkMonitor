@@ -34,15 +34,15 @@ export default function DashboardPage() {
         {loading && !d ? <Skeleton className="h-24 w-full" /> : (
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Target</p><p className="text-2xl font-semibold">{d?.target}</p></Link>
-              <div><p className="text-xs text-zinc-500">Relevant</p><p className="text-2xl font-semibold text-blue-600">{p?.relevant} <span className="text-sm font-normal text-zinc-500">{pct}%</span></p></div>
-              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Remaining</p><p className="text-2xl font-semibold">{p?.remaining}</p></Link>
-              <div><p className="text-xs text-zinc-500">Pending</p><p className="text-2xl font-semibold text-amber-600">{p?.pending}</p></div>
+              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Target</p><p className="text-2xl font-semibold">{d?.target}</p><p className="text-[11px] text-zinc-500">{p?.remaining} still needed</p></Link>
+              <div title="Links planned but not placed yet"><p className="text-xs text-zinc-500">Pending</p><p className="text-2xl font-semibold text-zinc-600">{p?.pending}</p><p className="text-[11px] text-zinc-500">not placed yet</p></div>
+              <div title="Links placed and waiting to appear on the page"><p className="text-xs text-zinc-500">In progress</p><p className="text-2xl font-semibold text-amber-600">{p?.inProcess}</p><p className="text-[11px] text-zinc-500">waiting to go live</p></div>
+              <div title="Links found on the page. Relevant ones passed every check and count toward the target."><p className="text-xs text-zinc-500">Live</p><p className="text-2xl font-semibold text-green-600">{p?.live} <span className="text-sm font-normal text-zinc-500">{pct}% of target</span></p><p className="text-[11px] text-zinc-500">{p?.relevant} relevant (count toward target)</p></div>
             </div>
             <Progress value={pct} className="mt-4" />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
               <span>{p?.relevant} / {d?.target} relevant · {pct}% · <Link to={`/clients?month=${month}`} className="underline decoration-dotted hover:text-zinc-800">{d?.clientsAtTarget} of {d?.clientCount} clients at target</Link></span>
-              <span className="flex gap-1.5"><Badge>{d?.chips.unverified} Unverified</Badge><Badge tone="amber">{d?.chips.awaitingIndex} Awaiting index</Badge><Badge tone="amber">{d?.chips.partlyFixing} Partly fixing</Badge></span>
+              <span className="flex gap-1.5"><Badge>{d?.chips.unverified} Unverified</Badge><Badge tone="amber">{d?.chips.awaitingIndex} Awaiting index</Badge><Badge tone="amber">{d?.chips.partlyFixing} Partly fixing</Badge>{!!d?.chips.needsDonorNumbers && <Badge>{d.chips.needsDonorNumbers} Need donor numbers</Badge>}</span>
             </div>
           </>
         )}

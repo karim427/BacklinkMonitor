@@ -26,8 +26,8 @@ describe("verdict when the donor has no numbers", () => {
   it("is Not judged, not Partly relevant or Not relevant", () => expect(verdictFor(["donor_metrics_missing"]).verdict).toBe("Not judged"));
   it("a hard reject that doesn't need metrics still wins", () => expect(verdictFor(["domain_spam_tld", "donor_metrics_missing"]).verdict).toBe("Not relevant"));
   it("counts as pending toward the target, not as received-relevant", () => {
-    const p = targetProgress([{ verdict: "Not judged", createdAt: new Date("2026-11-05") }, { verdict: "Relevant", createdAt: new Date("2026-11-06") }], "2026-11", 4);
-    expect(p).toMatchObject({ relevant: 1, pending: 1, remaining: 3 });
+    const p = targetProgress([{ verdict: "Not judged", action: "LIVE", createdAt: new Date("2026-11-05") }, { verdict: "Relevant", action: "LIVE", createdAt: new Date("2026-11-06") }], "2026-11", 4);
+    expect(p).toMatchObject({ relevant: 1, pending: 0, live: 2, needsDonorNumbers: 1, remaining: 3 });
   });
 });
 
@@ -78,10 +78,14 @@ describe("verdict", () => {
 });
 
 describe("target counting", () => {
-  const mk = (verdict: any, placedAt: string) => ({ verdict, placedAt, createdAt: placedAt });
+  const mk = (verdict: any, placedAt: string, action?: string) => ({ verdict, action, placedAt, createdAt: placedAt });
   it("only Relevant counts", () => {
-    const p = targetProgress([mk("Relevant", "2026-11-02"), mk("Partly relevant", "2026-11-03"), mk("Not relevant", "2026-11-04"), mk("Relevant", "2026-10-30")], "2026-11", 3);
-    expect(p).toMatchObject({ received: 3, relevant: 1, pending: 1, rejected: 1, remaining: 2 });
+    const p = targetProgress([mk("Relevant", "2026-11-02", "LIVE"), mk("Partly relevant", "2026-11-03", "REPLACE"), mk("Not relevant", "2026-11-04", "REPLACE"), mk("Relevant", "2026-10-30", "LIVE")], "2026-11", 3);
+    expect(p).toMatchObject({ received: 3, relevant: 1, live: 1, pending: 0, inProcess: 0, fixing: 1, rejected: 1, remaining: 2 });
+  });
+  it("pending = Pending only, inProcess = In process, live = Live; none of them is 'judged but fixable'", () => {
+    const p = targetProgress([mk("Not judged", "2026-11-02", "PENDING"), mk("Not judged", "2026-11-03", "IN_PROCESS"), mk("Partly relevant", "2026-11-04", "REPLACE"), mk("Not judged", "2026-11-05", "LIVE")], "2026-11", 5);
+    expect(p).toMatchObject({ pending: 1, inProcess: 1, live: 1, fixing: 1, needsDonorNumbers: 1, relevant: 0, remaining: 5 });
   });
   it("remaining never negative", () => expect(targetProgress([mk("Relevant", "2026-11-01")], "2026-11", 0).remaining).toBe(0));
 });
