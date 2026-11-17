@@ -8,6 +8,7 @@ import {
 import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules.js";
 import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
 import { aiStatus } from "../services/ai.js";
+import { ahrefsStatus, checkAhrefsKey, setAhrefsKey } from "../services/secrets.js";
 
 export const core = Router();
 
@@ -302,12 +303,21 @@ core.post("/rechecks/run-due", wrap(async () => ({ results: await runDueRechecks
 core.get("/settings", wrap(async () => ({
   settings: await getSettings(), rejectRules: REJECT_RULES, ai: aiStatus(),
   ahrefs: {
-    credentialLoaded: !!process.env.AHREFS_API_KEY, mock: !process.env.AHREFS_API_KEY,
+    ...(await (async () => { const st = await ahrefsStatus(); return { credentialLoaded: st.connected, mock: !st.connected, source: st.source, last4: st.last4 }; })()),
     donorsSynced: (await db.select().from(s.donors)).filter((d) => d.ahrefsSyncedAt).length, donorsTotal: (await db.select().from(s.donors)).length,
     lastSync: (await db.select().from(s.donors)).reduce<Date | null>((a, d) => (d.ahrefsSyncedAt && (!a || d.ahrefsSyncedAt > a) ? d.ahrefsSyncedAt : a), null),
   },
 })));
 const bandSchema = z.object({ min: z.number(), max: z.number() });
+/** Admin-only (the gate blocks non-GET for users). The key is write-only: it is never returned, only its last 4 characters. */
+core.put("/settings/ahrefs-key", wrap(async (req) => {
+  const { key } = z.object({ key: z.string().trim().min(8).max(500).nullable() }).parse(req.body);
+  if (key === null) { await setAhrefsKey(null); return { ok: true, removed: true }; }
+  const check = await checkAhrefsKey(key);
+  if (check === "invalid") throw new HttpError(400, "Ahrefs rejected this key. Check that you copied the whole API key.");
+  await setAhrefsKey(key);
+  return { ok: true, verified: check === "valid" };
+}));
 core.put("/settings", wrap(async (req) => {
   const b = z.object({
     verifierUserAgent: z.string().min(1), firstRecheckDays: z.number().int().min(1), nextRecheckDays: z.number().int().min(1),

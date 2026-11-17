@@ -58,7 +58,7 @@ export default function DonorsPage() {
   const [syncing, setSyncing] = useState(false); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
   const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.domain} ${r.name}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.cluster || r.cluster === f.cluster) && (!f.local || r.isLocal));
   const pg = usePaged(rows, [f, preview]); const t = data?.totals;
-  async function sync() { setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(`Synced ${r.synced}/${r.total} donors${r.mock ? " (mock data — no AHREFS_API_KEY set)" : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
+  async function sync() { setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(`Synced ${r.synced}/${r.total} donors${r.mock ? " (mock data — add your Ahrefs key in Settings)" : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
   return (
     <>
       <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Syncing…" : "Sync from Ahrefs"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />

@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Badge, Button, Card, ErrorBanner, Field, Input } from "@/components/ui/primitives";
@@ -14,9 +15,18 @@ export default function SettingsPage() {
   const { data, error, reload } = useApi("/settings"); const { data: cl, reload: reloadClients } = useApi("/clients");
   const [s, setS] = useState<any>(DEFAULT_SETTINGS); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ c: any } | null>(null); const [delT, setDelT] = useState<any>(null); const [syncing, setSyncing] = useState(false);
+  const [ahKey, setAhKey] = useState(""); const [ahBusy, setAhBusy] = useState(false);
   const [openCluster, setOpenCluster] = useState<Record<string, boolean>>({});
   useEffect(() => { if (data) setS(data.settings); }, [data]);
   const save = async (body: any, label: string) => { setErr(null); setMsg(null); try { await put("/settings", body); setMsg(`${label} saved.`); reload(); } catch (e: any) { setErr(e.message); } };
+  async function saveAhKey(remove = false) {
+    setErr(null); setMsg(null); setAhBusy(true);
+    try {
+      const r = await put("/settings/ahrefs-key", { key: remove ? null : ahKey });
+      setMsg(remove ? "Ahrefs key removed. Donor metrics will use mock data." : r.verified ? "Ahrefs key saved and verified." : "Ahrefs key saved, but it could not be verified right now.");
+      setAhKey(""); reload();
+    } catch (e: any) { setErr(e.message); } finally { setAhBusy(false); }
+  }
   const band = (k: string, side: "min" | "max", v: number) => setS({ ...s, anchorBands: { ...s.anchorBands, [k]: { ...s.anchorBands[k], [side]: v } } });
   const bandErr = Object.entries(s.anchorBands as Record<string, any>).find(([, b]) => b.min < 0 || b.max > 100 || b.min > b.max);
   const clients: any[] = cl?.rows ?? []; const ah = data?.ahrefs;
@@ -48,9 +58,16 @@ export default function SettingsPage() {
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Card className="p-5"><h2 className="mb-3 text-sm font-semibold">Ahrefs API</h2>
           <div className="space-y-1.5 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Status</span><Badge tone={ah?.credentialLoaded ? "green" : "amber"}>{ah?.credentialLoaded ? "Connected" : "No key — using mock data"}</Badge></div>
-            <div className="flex justify-between"><span className="text-zinc-500">Credential loaded</span><span>{ah?.credentialLoaded ? "Yes (hidden)" : "No"}</span></div>
+            <div className="flex justify-between"><span className="text-zinc-500">API key</span><span>{ah?.credentialLoaded ? `•••• ${ah.last4} (${ah.source === "settings" ? "saved here" : "server setting"})` : "Not set"}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Donors synced</span><span>{ah?.donorsSynced} / {ah?.donorsTotal}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Last sync</span><span>{fmtDate(ah?.lastSync)}</span></div></div>
+          <AdminOnly><form className="mt-4 space-y-2 border-t border-zinc-100 pt-4" onSubmit={(e) => { e.preventDefault(); if (ahKey.trim()) saveAhKey(); }}>
+            <Field label={ah?.credentialLoaded ? "Replace Ahrefs API key" : "Ahrefs API key"} hint="Stored encrypted on the server. It is never shown again after saving.">
+              <Input type="password" autoComplete="off" spellCheck={false} placeholder="Paste your Ahrefs API v3 key" value={ahKey} onChange={(e) => setAhKey(e.target.value)} />
+            </Field>
+            <div className="flex gap-2"><Button disabled={ahBusy || ahKey.trim().length < 8}>{ahBusy ? "Checking…" : "Save key"}</Button>
+              {ah?.source === "settings" && <Button type="button" variant="ghost" disabled={ahBusy} onClick={() => saveAhKey(true)}>Remove key</Button>}</div>
+          </form></AdminOnly>
           <Button className="mt-4" variant="outline" disabled={syncing} onClick={async () => { setSyncing(true); try { const r = await post("/donors/sync-ahrefs"); setMsg(`Synced ${r.synced}/${r.total} donors${r.mock ? " (mock)" : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }}>{syncing ? "Syncing…" : "Sync donors"}</Button></Card>
         <Card className="p-5"><h2 className="mb-3 text-sm font-semibold">Verification defaults</h2>
           <div className="grid grid-cols-2 gap-3">

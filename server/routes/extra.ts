@@ -5,6 +5,7 @@ import { db, schema as s } from "../db/index.js";
 import { BANNED_VERTICALS, CLUSTERS, CLUSTER_SEED_KEYWORDS, NON_US_TLDS, SPAM_TLDS, type Cluster } from "../services/constants.js";
 import { checkA, evaluateRejectRules, napMatch } from "../services/rules.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
+import { getAhrefsKey } from "../services/secrets.js";
 import { toDonorMetrics, hostOf } from "../services/linkService.js";
 import { aiConfigured, aiStatus, chat, extractJson } from "../services/ai.js";
 import { HttpError, loadLinks, wrap } from "./core.js";
@@ -51,7 +52,7 @@ extra.post("/donors/sync-ahrefs", wrap(async () => {
   let synced = 0; const errors: string[] = []; let mock = false;
   for (const d of donors) {
     try {
-      const m = await fetchDonorMetrics(d.domain); mock = m.mock;
+      const m = await fetchDonorMetrics(d.domain, (await getAhrefsKey()) ?? ""); mock = m.mock;
       const hist = [...(d.trafficHistory ?? []), m.organicTraffic].slice(-6);
       (await db.update(s.donors).set({ dr: m.dr, usTrafficPct: m.usTrafficPct, organicTraffic: m.organicTraffic, referringDomains: m.referringDomains, linkedDomains: m.linkedDomains, trafficHistory: hist, ahrefsSyncedAt: new Date() }).where(eq(s.donors.id, d.id)));
       synced++;

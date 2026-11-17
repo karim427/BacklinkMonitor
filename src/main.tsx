@@ -18,13 +18,14 @@ const HaroPage = lazy(() => import("./pages/HaroPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const UsersPage = lazy(() => import("./pages/UsersPage"));
 import { AuthGate } from "./components/AuthGate";
+import { RouteBoundary } from "./components/RouteBoundary";
 
 const NotFound = () => <EmptyState title="Page not found" hint="That page doesn't exist." action={<Button asChild><Link to="/">Back to dashboard</Link></Button>} />;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AuthGate><BrowserRouter>
-      <Suspense fallback={null}><Routes>
+      <RouteBoundary><Suspense fallback={null}><Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="clients" element={<ClientsPage />} />
@@ -42,7 +43,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="users" element={<UsersPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
-      </Routes></Suspense>
+      </Routes></Suspense></RouteBoundary>
     </BrowserRouter></AuthGate>
   </React.StrictMode>,
 );
