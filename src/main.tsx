@@ -1,13 +1,12 @@
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Route, Routes, Link } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
 import "./index.css";
 import { AppShell } from "./components/AppShell";
 import { EmptyState, Button } from "./components/ui/primitives";
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const ClientsPage = lazy(() => import("./pages/ClientsPage"));
 const ClientTrackingPage = lazy(() => import("./pages/ClientTrackingPage"));
-const TargetLinksPage = lazy(() => import("./pages/TargetLinksPage"));
 const LinksPage = lazy(() => import("./pages/LinksPage"));
 const TargetPagesPage = lazy(() => import("./pages/TargetPagesPage"));
 const DonorsPage = lazy(() => import("./pages/DonorsPage"));
@@ -30,7 +29,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/:id" element={<ClientTrackingPage />} />
           <Route path="clients/:id/:month" element={<ClientTrackingPage />} />
-          <Route path="target-links" element={<TargetLinksPage />} />
+          <Route path="target-links" element={<Navigate to="/links" replace />} />
           <Route path="links" element={<LinksPage />} />
           <Route path="target-pages" element={<TargetPagesPage />} />
           <Route path="donors" element={<DonorsPage />} />

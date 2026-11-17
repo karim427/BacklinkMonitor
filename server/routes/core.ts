@@ -251,7 +251,7 @@ async function createLink(b: z.infer<typeof linkBody>, userId?: number) {
   const placedAt = b.placedAt ? new Date(b.placedAt) : null;
   const { autoVerify, donorDomain, donorId: _d, ...rest } = b;
   const action = rest.action ?? (placedAt ? "IN_PROCESS" : "PENDING");
-  const verdict = rest.verdict ?? (action === "REJECTED" ? "Not relevant" : PRE_LIVE.includes(action) ? "Not judged" : undefined); // not judged until it is live
+  const verdict = rest.verdict ?? (action === "REJECTED" ? "Not relevant" : "Not judged"); // nothing is judged until it has been checked (auto-verify or Verify now sets the real verdict)
   const values = { ...rest, action, ...(verdict ? { verdict } : {}), donorId, placedAt, createdBy: userId || null, ...(placedAt ? await scheduleOnPlace(placedAt) : {}), verificationStatus: autoVerify ? "Queued" : "Unverified" } as typeof s.links.$inferInsert;
   const row = (await db.insert(s.links).values(values).returning())[0];
   if (autoVerify) return runVerification(row.id);
@@ -286,9 +286,21 @@ function parseCsv(text: string) {
   cur.push(f); if (cur.some(Boolean)) rows.push(cur);
   return rows;
 }
+/** "11/17/2026", "2026-11-17", "17 Nov 2026" -> "2026-11-17" (undefined if it isn't a date). */
+const dateOf = (v?: string) => { if (!v) return undefined; const t = Date.parse(v); return Number.isNaN(t) ? undefined : new Date(t - new Date(t).getTimezoneOffset() * 60_000).toISOString().slice(0, 10); };
 core.post("/links/import", wrap(async (req) => {
   const { csv } = z.object({ csv: z.string().min(1) }).parse(req.body);
-  const [head, ...rows] = parseCsv(csv); const idx = (n: string) => head.findIndex((h) => h.trim().toLowerCase() === n.toLowerCase());
+  const [head, ...rows] = parseCsv(csv);
+  // Column names are matched loosely so a sheet (or this app's own export) can be imported as it is.
+  const ALIASES: Record<string, string[]> = {
+    client: ["client", "client name", "website"], sourceUrl: ["sourceurl", "link from", "link from (page url)", "source url", "source", "url from", "page url"],
+    targetUrl: ["targeturl", "link to", "link to (client url)", "target url", "target", "url to"], anchorText: ["anchortext", "anchor", "anchor text"],
+    anchorType: ["anchortype", "anchor type"], placement: ["placement"], reviewer: ["reviewer", "name", "added by", "builder"],
+    placedAt: ["placedat", "placed at", "placed date", "placed", "date", "date placed"], status: ["status", "action"],
+  };
+  const norm = (h: string) => h.replace(/^\uFEFF/, "").trim().toLowerCase();
+  const idx = (n: string) => head.findIndex((h) => (ALIASES[n] ?? [n.toLowerCase()]).includes(norm(h)));
+  const STATUS: Record<string, string> = { pending: "PENDING", "in process": "IN_PROCESS", "in progress": "IN_PROCESS", live: "LIVE", rejected: "REJECTED" };
   const clients = (await db.select().from(s.clients));
   const result = { created: 0, errors: [] as { row: number; error: string }[] };
   for (const [i, r] of rows.entries()) {
@@ -296,8 +308,11 @@ core.post("/links/import", wrap(async (req) => {
     const c = clients.find((x) => x.name.toLowerCase() === (get("client") ?? "").toLowerCase() || x.slug === get("client"));
     const parsed = linkBody.safeParse({
       clientId: c?.id, sourceUrl: get("sourceUrl"), targetUrl: get("targetUrl"), anchorText: get("anchorText") ?? "",
-      anchorType: get("anchorType") ?? "Natural", placement: get("placement") ?? "Unknown", reviewer: get("reviewer"), placedAt: get("placedAt"),
+      anchorType: get("anchorType") ?? "Natural", placement: get("placement") ?? "Unknown", reviewer: get("reviewer"), placedAt: dateOf(get("placedAt")),
+      ...(get("status") ? { action: STATUS[get("status")!.toLowerCase()] } : {}),
     });
+    if (get("status") && !STATUS[get("status")!.toLowerCase()]) { result.errors.push({ row: i + 2, error: `Unknown status "${get("status")}" (use Pending, In process, Live or Rejected)` }); continue; }
+    if (get("placedAt") && !dateOf(get("placedAt"))) { result.errors.push({ row: i + 2, error: `placedAt: "${get("placedAt")}" is not a date` }); continue; }
     if (!parsed.success) { result.errors.push({ row: i + 2, error: c ? parsed.error.issues[0].path.join(".") + ": " + parsed.error.issues[0].message : `Unknown client "${get("client")}"` }); continue; }
     await createLink(parsed.data, req.user?.id); result.created++;
   }

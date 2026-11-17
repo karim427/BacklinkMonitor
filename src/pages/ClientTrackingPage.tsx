@@ -25,7 +25,7 @@ export default function ClientTrackingPage() {
     <>
       <PageHeader title={drill ? `${c.name} · ${monthLabel(drill)}` : c.name} description={`${c.domain} · ${c.cluster}${c.city ? ` · ${c.city}, ${c.state}` : ""} · Default target ${c.defaultMonthlyTarget} / month`}
         actions={<><AdminOnly><Button variant="outline" onClick={() => setEdit({ month: months[0].month, target: c.defaultMonthlyTarget })}>Add month target</Button></AdminOnly>
-          <Button variant="outline" asChild><Link to="/target-links">View target links</Link></Button>
+          <Button variant="outline" asChild><Link to={`/links?client=${id}`}>View links</Link></Button>
           {drill && <Button variant="ghost" onClick={() => nav(`/clients/${id}`)}>← All months</Button>}</>} />
       {err && <div className="mb-4"><ErrorBanner message={err} /></div>}
       <KpiRow cols={5}>
