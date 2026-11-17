@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
 const secret = () => process.env.APP_PASSWORD ?? "";
-export const authRequired = () => !!secret() || !!process.env.VERCEL;
+export const authRequired = () => !!secret(); // no APP_PASSWORD = open access (no login page)
 export const tokenFor = (pw: string) => crypto.createHmac("sha256", pw).update("backlink-verify-v1").digest("hex");
 const safeEq = (a: string, b: string) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 
