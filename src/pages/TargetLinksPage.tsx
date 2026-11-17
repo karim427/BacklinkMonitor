@@ -5,8 +5,9 @@ import { del, useApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { ConfirmDialog, RowMenu } from "@/components/ui/overlays";
 import { LinkDialog } from "@/features/links/LinkDialog";
+import { ExportDialog } from "@/features/links/ExportDialog";
 import { StatusSelect } from "@/features/links/StatusSelect";
-import { cn, downloadText, monthLabel } from "@/lib/utils";
+import { cn, monthLabel } from "@/lib/utils";
 import { ActionBadge, FilterBar, PageHeader, Panel, RefreshButton, Sub, TableSkeleton } from "@/features/shared/common";
 
 const COLS = ["A · Link from", "B · Anchor text", "C · Link to", "D · DR", "E · Action", "F · Name", "G · Client"];
@@ -16,6 +17,7 @@ export default function TargetLinksPage() {
   const { isAdmin } = useAuth();
   // Months are dropdowns. The newest month starts open; picking "Jump to month" opens that one.
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const [exporting, setExporting] = useState(false);
   const [edit, setEdit] = useState<any | null>(null); const [delTarget, setDel] = useState<any | null>(null);
   const [client, setClient] = useState(""); const [month, setMonth] = useState("");
   const rows: any[] = data?.rows ?? [];
@@ -24,13 +26,9 @@ export default function TargetLinksPage() {
   const groups = [...new Set<string>(filtered.map((l) => l.month))].sort().reverse();
   const isOpen = (g: string) => openMonths[g] ?? (month ? g === month : g === groups[0]);
   const clients = [...new Map(rows.map((l) => [l.clientId, l.client?.name])).entries()].map(([value, label]) => ({ value, label }));
-  const exportCsv = () => {
-    const q = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    downloadText("target-links.csv", [["Month", "Link from", "Anchor", "Link to", "DR", "Action", "Name", "Client"].map(q).join(","), ...filtered.map((l) => [l.month, l.sourceUrl, l.anchorText, l.targetUrl, l.donor?.dr, l.action, l.reviewer, l.client?.name].map(q).join(","))].join("\n"));
-  };
   return (
     <>
-      <PageHeader title="Target links" description="The team's link sheet, grouped by month." actions={<><RefreshButton onClick={reload} loading={loading} /><Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4" />Export CSV</Button></>} />
+      <PageHeader title="Target links" description="The team's link sheet, grouped by month." actions={<><RefreshButton onClick={reload} loading={loading} /><Button variant="outline" onClick={() => setExporting(true)}><Download className="h-4 w-4" />Export CSV</Button></>} />
       {error && <div className="mb-4"><ErrorBanner message={error} onRetry={reload} /></div>}
       <Panel className="mb-4"><FilterBar dirty={!!client || !!month} onClear={() => { setClient(""); setMonth(""); setOpenMonths({}); }}>
         <Select className="w-48" value={client} onChange={setClient} placeholder="All clients" options={clients} />
@@ -63,6 +61,7 @@ export default function TargetLinksPage() {
           </Panel>
         );
       })}
+      <ExportDialog open={exporting} onOpenChange={setExporting} links={rows} defaultClient={client} defaultMonth={month} />
       {isAdmin && <>
         <LinkDialog open={!!edit} link={edit} onOpenChange={(o) => !o && setEdit(null)} onSaved={reload} />
         <ConfirmDialog open={!!delTarget} onOpenChange={(o) => !o && setDel(null)} title="Delete this link?" description={delTarget?.sourceUrl} onConfirm={async () => { await del(`/links/${delTarget.id}`); reload(); }} />

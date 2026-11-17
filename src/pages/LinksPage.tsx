@@ -7,6 +7,7 @@ import { authHeaders, del, post, useApi } from "@/lib/api";
 import { downloadText, fmtDate, ruleLabel } from "@/lib/utils";
 import { Pager, PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, ActionBadge, StageBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, usePaged, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
+import { ExportDialog } from "@/features/links/ExportDialog";
 import { StatusSelect } from "@/features/links/StatusSelect";
 import { PRE_LIVE, STAGES, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
 
@@ -14,6 +15,7 @@ export default function LinksPage() {
   const { data, error, loading, reload } = useApi("/links");
   const [sp, setSp] = useSearchParams();
   const [f, setF] = useState({ q: "", client: "", verdict: "", stage: "", ver: "", donor: "", due: false });
+  const [exporting, setExporting] = useState(false);
   const [edit, setEdit] = useState<any | null>(null); const [delTarget, setDel] = useState<any | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null); const [rowErr, setRowErr] = useState<string | null>(null);
   const [imp, setImp] = useState<{ created: number; errors: any[] } | null>(null);
@@ -34,10 +36,6 @@ export default function LinksPage() {
   const t = data?.totals;
 
   async function verify(id: number) { setBusyId(id); setRowErr(null); try { await post(`/links/${id}/verify`); reload(); } catch (e: any) { setRowErr(e.message); } finally { setBusyId(null); } }
-  async function exportLog() {
-    try { const r = await fetch("/api/links/export", { headers: authHeaders() }); if (!r.ok) throw new Error(`Export failed (${r.status})`); downloadText("backlink-review-log.csv", await r.text()); }
-    catch (e: any) { setRowErr(e.message); }
-  }
   async function onFile(file?: File) {
     if (!file) return;
     try { setImp(await post("/links/import", { csv: await file.text() })); reload(); } catch (e: any) { setRowErr(e.message); }
@@ -49,7 +47,7 @@ export default function LinksPage() {
       <PageHeader title="Links" description="Every backlink reviewed against Stage 1, checks A–C and the reject list." actions={<>
         <input ref={fileRef} type="file" accept=".csv" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" />Import CSV</Button>
-        <Button variant="outline" onClick={exportLog}><Download className="h-4 w-4" />Export review log</Button>
+        <Button variant="outline" onClick={() => setExporting(true)}><Download className="h-4 w-4" />Export…</Button>
         <RefreshButton onClick={reload} loading={loading} />
       </>} />
       {(error || rowErr) && <div className="mb-4"><ErrorBanner message={(error || rowErr)!} onRetry={reload} /></div>}
@@ -96,6 +94,7 @@ export default function LinksPage() {
         )}
         <Pager p={pg} />
       </Panel>
+      <ExportDialog open={exporting} onOpenChange={setExporting} links={rows} defaultClient={f.client} />
       <LinkDialog open={sp.get("new") === "1" || !!edit} link={edit} onOpenChange={(o) => { if (!o) { setEdit(null); if (sp.get("new")) { sp.delete("new"); setSp(sp, { replace: true }); } } }} onSaved={reload} />
       <ConfirmDialog open={!!delTarget} onOpenChange={(o) => !o && setDel(null)} title="Delete this link?" description={delTarget?.sourceUrl} onConfirm={async () => { await del(`/links/${delTarget.id}`); reload(); }} />
       <Dialog open={!!imp} onOpenChange={(o) => !o && setImp(null)} title="Import finished" description={`${imp?.created ?? 0} link(s) created, ${imp?.errors.length ?? 0} row(s) skipped.`}>
