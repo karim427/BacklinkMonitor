@@ -74,9 +74,9 @@ export function Pager({ p }: { p: ReturnType<typeof usePaged<any>> }) {
   );
 }
 export const FilterBar = ({ children, onClear, dirty }: { children: React.ReactNode; onClear?: () => void; dirty?: boolean }) => (
-  <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 p-3">
+  <div className="grid grid-cols-1 items-center gap-3 border-b border-zinc-200 p-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] [&>input:not([type=checkbox])]:!w-full [&>select]:!w-full">
     {children}
-    {onClear && dirty && <Button variant="ghost" size="sm" onClick={onClear}>Clear</Button>}
+    {onClear && dirty && <Button variant="ghost" size="sm" className="justify-self-start" onClick={onClear}>Clear</Button>}
   </div>
 );
 export const THead = ({ cols }: { cols: string[] }) => (

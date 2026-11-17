@@ -23,13 +23,13 @@ export function AppShell() {
   const loc = useLocation(); const nav = useNavigate();
   const current = NAV.find((n) => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)))?.label ?? "Not found";
   return (
-    <div className="flex h-full">
-      <aside className={cn("fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-black text-white transition-transform lg:static lg:translate-x-0", open ? "translate-x-0" : "-translate-x-full")}>
+    <div className="flex h-dvh overflow-hidden">
+      <aside className={cn("fixed inset-y-0 left-0 z-30 flex h-dvh w-60 shrink-0 flex-col bg-black text-white transition-transform lg:static lg:translate-x-0", open ? "translate-x-0" : "-translate-x-full")}>
         <div className="flex items-center justify-between px-5 py-5">
           <div><div className="text-base font-semibold">Backlink Verify</div><div className="text-xs text-zinc-400">QA workspace</div></div>
           <button className="lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button>
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-3 pb-2 [scrollbar-color:#52525b_transparent] [scrollbar-width:thin]">
           {NAV.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink key={to} to={to} end={end} onClick={() => setOpen(false)}
               className={({ isActive }) => cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm", isActive ? "bg-white/15 font-medium" : "text-zinc-300 hover:bg-white/10")}>
