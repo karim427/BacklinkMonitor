@@ -94,9 +94,14 @@ export async function scheduleOnPlace(placedAt: Date) {
 export async function runDueRechecks(now = new Date()) {
   const due = (await db.select().from(s.links).where(and(ne(s.links.stage, "Lost")))).filter((l) => l.nextCheckAt && l.nextCheckAt <= now);
   const out: { id: number; verdict: string; error?: boolean }[] = [];
-  for (const l of due) {
-    const r = await runVerification(l.id);
-    out.push({ id: l.id, verdict: r.verdict, error: r.verificationStatus === "Error" });
+  // A few at a time: each check can take up to 15s waiting on the donor site, and a serverless run has a hard time limit.
+  const BATCH = 4;
+  for (let i = 0; i < due.length; i += BATCH) {
+    const done = await Promise.all(due.slice(i, i + BATCH).map(async (l) => {
+      try { const r = await runVerification(l.id); return { id: l.id, verdict: r.verdict, error: r.verificationStatus === "Error" }; }
+      catch { return { id: l.id, verdict: "Unknown", error: true }; }
+    }));
+    out.push(...done);
   }
   return out;
 }
