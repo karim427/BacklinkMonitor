@@ -23,10 +23,12 @@ let _migrate: () => Promise<void>;
 if (url) {
   const client = postgres(url, {
     prepare: false, max: process.env.VERCEL ? 3 : 5,
+    // Supabase's transaction pooler hangs when several queries are pipelined onto one connection (e.g. Promise.all). One query at a time per connection.
+    max_pipeline: 1,
     // Serverless: sockets that sit idle get silently dropped, and the next query on a dead socket hangs until the function times out.
     // Close idle connections quickly and fail fast instead of hanging.
     idle_timeout: process.env.VERCEL ? 4 : 0, connect_timeout: 10, max_lifetime: process.env.VERCEL ? 300 : null,
-    ssl: /localhost|127\.0\.0\.1/.test(url) ? false : "require" });
+    ssl: /localhost|127\.0\.0\.1/.test(url) ? false : "require" } as any);
   _db = drizzlePg(client, { schema }) as any;
   _migrate = () => migratePg(_db as any, { migrationsFolder });
 } else {
