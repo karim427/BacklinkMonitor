@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Input, Select } from "@/components/ui/primitives";
 import { post, put, useApi } from "@/lib/api";
 import { PageHeader, Panel, Sub, Table, TableSkeleton, THead } from "@/features/shared/common";
+import { UnitsNote } from "@/features/ahrefs/UsageMeter";
 
 /** Sites that link to a client's competitors but not to the client: the people to reach out to. */
 export default function OpportunitiesPage() {
@@ -20,7 +21,7 @@ export default function OpportunitiesPage() {
   async function saveComps(next: string[]) { setErr(null); try { const r = await put("/opportunities/competitors", { clientId: Number(clientId), domains: next }); setComps(r.competitors); reload(); } catch (e: any) { setErr(e.message); } }
   async function doSuggest() { setBusy("suggest"); setErr(null); try { setSuggest((await post("/opportunities/suggest", { clientId: Number(clientId) })).suggestions); } catch (e: any) { setErr(e.message); } finally { setBusy(null); } }
   async function find() {
-    if (!window.confirm(`This asks Ahrefs about the client and ${comps.length} competitor${comps.length === 1 ? "" : "s"}: ${comps.length + 1} requests. Each uses Ahrefs units (at least 50). Continue?`)) return;
+    if (!window.confirm(`This asks Ahrefs about the client and ${comps.length} competitor${comps.length === 1 ? "" : "s"}: ${comps.length + 1} requests, at least ${((comps.length + 1) * 50).toLocaleString("en-US")} Ahrefs units in total. Continue?`)) return;
     setBusy("find"); setErr(null); setMsg(null);
     try { const r = await post("/opportunities/find", { clientId: Number(clientId) }); setMsg(`Done: ${r.rows.length} sites link to your competitors but not to the client (${r.requests} Ahrefs requests).`); setPick(new Set()); reload(); }
     catch (e: any) { setErr(e.message); } finally { setBusy(null); }
@@ -55,7 +56,7 @@ export default function OpportunitiesPage() {
               <div className="flex flex-wrap gap-2">{suggest.filter((s) => !comps.includes(s.domain)).map((s) => <button key={s.domain} className="rounded-full border border-zinc-200 px-3 py-1 text-sm hover:bg-zinc-50" onClick={() => addComp(s.domain)}>{s.domain}{s.dr != null && <span className="ml-1 text-xs text-zinc-500">DR {s.dr}</span>}</button>)}</div></div>}
             <div className="mt-4 flex items-center gap-3">
               <Button disabled={busy === "find" || !comps.length || !data?.hasKey} onClick={find}>{busy === "find" ? "Asking Ahrefs…" : "Find link gaps"}</Button>
-              {!data?.hasKey && <span className="text-xs text-zinc-500">Add your Ahrefs key in Settings first.</span>}
+              {!data?.hasKey ? <span className="text-xs text-zinc-500">Add your Ahrefs key in Settings first.</span> : <UnitsNote cost={`Costs at least ${((comps.length + 1) * 50).toLocaleString("en-US")} units`} />}
               {run && <span className="text-xs text-zinc-500">Last run {new Date(run.at).toLocaleDateString()} · compared with {comps.length} competitor{comps.length === 1 ? "" : "s"}</span>}
             </div>
           </div>)}

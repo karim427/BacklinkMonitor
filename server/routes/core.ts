@@ -14,6 +14,7 @@ import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { autoLookupEnabled } from "../services/donorMetrics.js";
 import { listLost, refreshLost } from "../services/ahrefsLost.js";
 import { previewDemoData, removeDemoData } from "../services/demoData.js";
+import { fetchUsage } from "../services/ahrefsUsageApi.js";
 
 export const core = Router();
 
@@ -330,6 +331,15 @@ core.get("/lost-links", wrap(async (req) => {
 core.post("/lost-links/refresh", wrap(async (req) => {
   const b = z.object({ clientId: z.number().int().optional(), days: z.number().int().min(1).max(365).optional() }).parse(req.body ?? {});
   try { return await refreshLost(b); } catch (e) { throw new HttpError(400, (e as Error).message); }
+}));
+/** Ahrefs units left. Free to ask (it does not spend units). */
+let usageCache: { at: number; data: any } | null = null;
+core.get("/ahrefs/usage", wrap(async () => {
+  const key = await getAhrefsKey();
+  if (!key) return { hasKey: false };
+  if (usageCache && Date.now() - usageCache.at < 30_000) return usageCache.data;
+  try { const data = { hasKey: true, ...(await fetchUsage(key)) }; usageCache = { at: Date.now(), data }; return data; }
+  catch (e) { return { hasKey: true, error: (e as Error).message }; }
 }));
 /** Sample data from the seed (reserved .example addresses). Admin-only to remove; the preview shows exactly what would go. */
 core.get("/demo-data", wrap(async () => previewDemoData()));

@@ -60,7 +60,10 @@ export default function DonorsPage() {
   const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.domain} ${r.name}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.cluster || r.cluster === f.cluster) && (!f.local || r.isLocal));
   const pg = usePaged(rows, [f, preview]); const t = data?.totals;
   async function lookup(id: number) { setLookingUp(id); setErr(null); setMsg(null); try { await post(`/donors/${id}/sync-ahrefs`); reload(); } catch (e: any) { setErr(e.message); } finally { setLookingUp(null); } }
-  async function sync() { setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(r.total === 0 ? "Every donor already has numbers. Use Look up on a row to refresh one." : `Looked up ${r.synced} of ${r.total} donors with no numbers${r.skipped ? ` (${r.skipped} already had numbers)` : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
+  async function sync() {
+    const missing = (data?.rows ?? []).filter((d: any) => !d.ahrefsSyncedAt && !d.dr && !d.organicTraffic).length;
+    if (!window.confirm(missing ? `This looks up ${missing} donor${missing === 1 ? "" : "s"} with no numbers. Each needs about 5 Ahrefs requests, so at least ${(missing * 250).toLocaleString("en-US")} units. Continue?` : "Every donor already has numbers. Look up again anyway?")) return;
+    setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(r.total === 0 ? "Every donor already has numbers. Use Look up on a row to refresh one." : `Looked up ${r.synced} of ${r.total} donors with no numbers${r.skipped ? ` (${r.skipped} already had numbers)` : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
   return (
     <>
       <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Looking up…" : "Look up missing"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />

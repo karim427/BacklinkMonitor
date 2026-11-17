@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { Badge, Button, Card, ErrorBanner, Field, Input } from "@/components/ui/primitives";
 import { ClientDialog } from "@/features/clients/ClientDialog";
 import { DemoDataCard } from "@/features/settings/DemoDataCard";
+import { UsageMeter } from "@/features/ahrefs/UsageMeter";
 import { ConfirmDialog, RowMenu } from "@/components/ui/overlays";
 import { del, post, put, useApi } from "@/lib/api";
 import { fmtDate } from "@/lib/utils";
@@ -80,6 +81,7 @@ export default function SettingsPage() {
             <div className="flex justify-between"><span className="text-zinc-500">API key</span><span>{ah?.credentialLoaded ? `•••• ${ah.last4} (${ah.source === "settings" ? "saved here" : "server setting"})` : "Not set"}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Donors synced</span><span>{ah?.donorsSynced} / {ah?.donorsTotal}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Last sync</span><span>{fmtDate(ah?.lastSync)}</span></div></div>
+          <div className="mt-4 border-t border-zinc-100 pt-4"><UsageMeter /></div>
           <AdminOnly><form className="mt-4 space-y-2 border-t border-zinc-100 pt-4" onSubmit={(e) => { e.preventDefault(); if (ahKey.trim()) saveAhKey(); }}>
             <Field label={ah?.credentialLoaded ? "Replace Ahrefs API key" : "Ahrefs API key"} hint="Stored encrypted on the server. It is never shown again after saving.">
               <Input type="password" autoComplete="off" spellCheck={false} placeholder="Paste your Ahrefs API v3 key" value={ahKey} onChange={(e) => setAhKey(e.target.value)} />

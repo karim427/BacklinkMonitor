@@ -16,7 +16,7 @@ export default function DashboardPage() {
   const { data: lost, reload: reloadLost } = useApi("/lost-links?days=60");
   const [checking, setChecking] = useState(false); const [lostMsg, setLostMsg] = useState<string | null>(null);
   async function checkLost() {
-    if (!window.confirm("This asks Ahrefs about each client that has links, one request per client. Each request uses API units (at least 50). Continue?")) return;
+    if (!window.confirm("This asks Ahrefs about each client that has links, one request per client. Each request uses at least 50 Ahrefs units. Continue?")) return;
     setChecking(true); setLostMsg(null);
     try { const r = await post("/lost-links/refresh", {}); setLostMsg(`Asked Ahrefs about ${r.clients} client${r.clients === 1 ? "" : "s"} (${r.requests} request${r.requests === 1 ? "" : "s"}).`); reloadLost(); }
     catch (e: any) { setLostMsg(e.message); } finally { setChecking(false); }
