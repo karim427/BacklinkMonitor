@@ -34,14 +34,14 @@ export default function DashboardPage() {
         {loading && !d ? <Skeleton className="h-24 w-full" /> : (
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Link to={`/clients?month=${month}&missing=1`} className="rounded-lg hover:bg-zinc-50" title="See which clients are missing links this month"><p className="text-xs text-zinc-500">Target</p><p className="text-2xl font-semibold">{d?.target}</p></Link>
+              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Target</p><p className="text-2xl font-semibold">{d?.target}</p></Link>
               <div><p className="text-xs text-zinc-500">Relevant</p><p className="text-2xl font-semibold text-blue-600">{p?.relevant} <span className="text-sm font-normal text-zinc-500">{pct}%</span></p></div>
-              <Link to={`/clients?month=${month}&missing=1`} className="rounded-lg hover:bg-zinc-50" title="See which clients are missing links this month"><p className="text-xs text-zinc-500">Remaining</p><p className="text-2xl font-semibold">{p?.remaining}</p></Link>
+              <Link to={`/clients?month=${month}`} className="rounded-lg hover:bg-zinc-50" title="See each client's progress this month"><p className="text-xs text-zinc-500">Remaining</p><p className="text-2xl font-semibold">{p?.remaining}</p></Link>
               <div><p className="text-xs text-zinc-500">Pending</p><p className="text-2xl font-semibold text-amber-600">{p?.pending}</p></div>
             </div>
             <Progress value={pct} className="mt-4" />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-              <span>{p?.relevant} / {d?.target} relevant · {pct}% · <Link to={`/clients?month=${month}&missing=1`} className="underline decoration-dotted hover:text-zinc-800">{d?.clientsAtTarget} of {d?.clientCount} clients at target</Link></span>
+              <span>{p?.relevant} / {d?.target} relevant · {pct}% · <Link to={`/clients?month=${month}`} className="underline decoration-dotted hover:text-zinc-800">{d?.clientsAtTarget} of {d?.clientCount} clients at target</Link></span>
               <span className="flex gap-1.5"><Badge>{d?.chips.unverified} Unverified</Badge><Badge tone="amber">{d?.chips.awaitingIndex} Awaiting index</Badge><Badge tone="amber">{d?.chips.partlyFixing} Partly fixing</Badge></span>
             </div>
           </>
