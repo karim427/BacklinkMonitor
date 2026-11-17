@@ -42,6 +42,8 @@ export interface DonorMetrics {
   trafficHistory?: number[]; // oldest -> newest, monthly
   flags?: { disavowed?: boolean; pbn?: boolean; expired?: boolean; hacked?: boolean; nonEnglish?: boolean; thinAi?: boolean; writeForUs?: boolean };
   niche?: string;
+  /** True when no metrics were ever loaded for this donor (all zeros, never synced). Metric-based rules are skipped instead of failing on placeholder zeros. */
+  metricsMissing?: boolean;
 }
 export interface CheckAResult { passed: boolean; criteria: { key: string; label: string; pass: boolean; detail: string }[] }
 
@@ -87,7 +89,8 @@ export function evaluateRejectRules(f: LinkFacts): string[] {
 
   add(SPAM_TLDS.some((t) => host.endsWith(t)), "domain_spam_tld");
   add(NON_US_TLDS.some((t) => host.endsWith(t)), "domain_non_us");
-  add(d.usTrafficPct < 60, "domain_low_us_traffic");
+  add(d.metricsMissing, "donor_metrics_missing");
+  add(!d.metricsMissing && d.usTrafficPct < 60, "domain_low_us_traffic");
   add(d.flags?.nonEnglish, "domain_non_english");
   add(d.flags?.disavowed, "domain_disavowed");
 
@@ -97,13 +100,13 @@ export function evaluateRejectRules(f: LinkFacts): string[] {
   add(!clusterFit, "niche_cluster_mismatch");
   add(d.flags?.writeForUs, "niche_write_for_us");
 
-  add(d.dr >= 40 && d.organicTraffic < 500, "quality_dr_traffic");
+  add(!d.metricsMissing && d.dr >= 40 && d.organicTraffic < 500, "quality_dr_traffic");
   const h = d.trafficHistory;
-  if (h && h.length >= 2) {
+  if (!d.metricsMissing && h && h.length >= 2) {
     const peak = Math.max(...h.slice(0, -1)); const now = h[h.length - 1];
     add(peak > 0 && (peak - now) / peak > 0.5, "quality_traffic_drop");
   }
-  add(d.referringDomains > 0 && d.linkedDomains > d.referringDomains * 2, "quality_linked_vs_rd");
+  add(!d.metricsMissing && d.referringDomains > 0 && d.linkedDomains > d.referringDomains * 2, "quality_linked_vs_rd");
   add(d.flags?.expired, "quality_expired");
   add(d.flags?.pbn, "quality_pbn");
   add(f.indexed === false, "quality_not_indexed");

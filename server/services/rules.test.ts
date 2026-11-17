@@ -10,6 +10,18 @@ const base = (o: Partial<LinkFacts> = {}, d: Partial<DonorMetrics> = {}): LinkFa
   donor: { ...donor, ...d }, clientCluster: "Tech / SaaS", sourceUrl: "https://goodblog.com/post", linkFound: true, targetMatched: true, indexed: true, rel: [], placement: "Body", outboundLinks: 10, ...o,
 });
 
+describe("donor with no metrics loaded", () => {
+  const zero = { ...donor, dr: 0, usTrafficPct: 0, organicTraffic: 0, referringDomains: 0, linkedDomains: 0, metricsMissing: true };
+  it("is flagged as a data gap, not rejected for 0% US traffic", () => {
+    const r = evaluateRejectRules({ ...base(), donor: zero });
+    expect(r).toEqual(["donor_metrics_missing"]);
+    expect(verdictFor(r).verdict).toBe("Partly relevant");
+  });
+  it("still fails on real low US traffic once metrics exist", () => {
+    expect(evaluateRejectRules({ ...base(), donor: { ...zero, metricsMissing: false, organicTraffic: 5000, dr: 30, usTrafficPct: 20 } })).toContain("domain_low_us_traffic");
+  });
+});
+
 describe("reject list", () => {
   it("has 26 rules", () => expect(REJECT_RULES).toHaveLength(26));
   it("clean link has no rejects", () => expect(evaluateRejectRules(base())).toEqual([]));

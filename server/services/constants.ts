@@ -63,7 +63,9 @@ export const REJECT_RULES: RejectRule[] = [
   { code: "reuse_more_than_3_clients", category: "Reuse", label: "Donor already links to more than 3 of our clients" },
 ];
 
-export const RULE_BY_CODE: Record<string, RejectRule> = Object.fromEntries(REJECT_RULES.map((r) => [r.code, r]));
+/** Not one of the 26 reject rules: a data gap flag. Treated as fixable so the link stays "Partly relevant" until metrics are loaded. */
+export const DONOR_METRICS_MISSING: RejectRule = { code: "donor_metrics_missing", category: "Quality", label: "Donor metrics not loaded yet (add the Ahrefs key and sync, or enter them on the Donors page)", fixable: true };
+export const RULE_BY_CODE: Record<string, RejectRule> = Object.fromEntries([...REJECT_RULES, DONOR_METRICS_MISSING].map((r) => [r.code, r]));
 
 export const SPAM_TLDS = [".shop", ".xyz", ".top", ".click", ".online", ".site"];
 export const NON_US_TLDS = [".uk", ".ca", ".au", ".in"];

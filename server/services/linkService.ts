@@ -13,6 +13,7 @@ export const toDonorMetrics = (d: typeof s.donors.$inferSelect): DonorMetrics =>
   domain: d.domain, dr: d.dr, usTrafficPct: d.usTrafficPct, organicTraffic: d.organicTraffic, referringDomains: d.referringDomains,
   linkedDomains: d.linkedDomains, cluster: d.cluster, isLocal: d.isLocal, trafficHistory: d.trafficHistory ?? undefined,
   flags: d.flags ?? {}, niche: d.niche ?? undefined,
+  metricsMissing: !d.ahrefsSyncedAt && !d.dr && !d.usTrafficPct && !d.organicTraffic && !d.referringDomains && !d.linkedDomains,
 });
 
 export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, "").toLowerCase(); } catch { return u.toLowerCase(); } };

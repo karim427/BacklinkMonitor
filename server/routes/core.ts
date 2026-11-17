@@ -8,7 +8,8 @@ import {
 import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, linkMonth } from "../services/rules.js";
 import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
 import { aiStatus } from "../services/ai.js";
-import { ahrefsStatus, checkAhrefsKey, setAhrefsKey } from "../services/secrets.js";
+import { ahrefsStatus, checkAhrefsKey, getAhrefsKey, setAhrefsKey } from "../services/secrets.js";
+import { fetchDonorMetrics } from "../services/ahrefs.js";
 
 export const core = Router();
 
@@ -213,7 +214,12 @@ async function resolveDonor(b: { donorId?: number | null; donorDomain?: string |
   const found = (await db.select().from(s.donors).where(eq(s.donors.domain, domain)))[0];
   if (found) return found.id;
   const client = (await db.select().from(s.clients).where(eq(s.clients.id, clientId)))[0];
-  return (await db.insert(s.donors).values({ domain, name: domain, cluster: client?.cluster ?? CLUSTERS[0] }).returning())[0].id;
+  let metrics: Partial<typeof s.donors.$inferInsert> = {};
+  const key = await getAhrefsKey();
+  if (key) { // real numbers only: never invent metrics for a donor we know nothing about
+    try { const m = await fetchDonorMetrics(domain, key); metrics = { dr: m.dr, usTrafficPct: m.usTrafficPct, organicTraffic: m.organicTraffic, referringDomains: m.referringDomains, linkedDomains: m.linkedDomains, ahrefsSyncedAt: new Date() }; } catch { /* leave empty: shows as "metrics not loaded" */ }
+  }
+  return (await db.insert(s.donors).values({ domain, name: domain, cluster: client?.cluster ?? CLUSTERS[0], ...metrics }).returning())[0].id;
 }
 core.get("/links", wrap(async () => {
   const all = await loadLinks();
