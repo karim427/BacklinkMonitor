@@ -25,10 +25,12 @@ const addMonths = (m: string, n: number) => { const [y, mo] = m.split("-").map(N
 
 /* ---------------- enrichment ---------------- */
 export async function loadLinks() {
-  const rows = (await db.select().from(s.links).orderBy(desc(s.links.placedAt)));
-  const cl = new Map((await db.select().from(s.clients)).map((c) => [c.id, c]));
-  const dn = new Map((await db.select().from(s.donors)).map((d) => [d.id, d]));
-  const tp = new Map((await db.select().from(s.targetPages)).map((t) => [t.id, t]));
+  const [rows, clientRows, donorRows, pageRows] = await Promise.all([
+    db.select().from(s.links).orderBy(desc(s.links.placedAt)), db.select().from(s.clients), db.select().from(s.donors), db.select().from(s.targetPages),
+  ]);
+  const cl = new Map(clientRows.map((c) => [c.id, c]));
+  const dn = new Map(donorRows.map((d) => [d.id, d]));
+  const tp = new Map(pageRows.map((t) => [t.id, t]));
   const now = new Date();
   return rows.map((l) => ({
     ...l,
@@ -46,11 +48,11 @@ const monthTargetFor = (client: typeof s.clients.$inferSelect, overrides: (typeo
 /* ---------------- dashboard ---------------- */
 core.get("/dashboard", wrap(async (req) => {
   const month = monthParam(req);
-  const settings = await getSettings();
-  const links = await loadLinks();
-  const clients = (await db.select().from(s.clients));
-  const overrides = (await db.select().from(s.clientMonthTargets));
-  const ws = (await db.select().from(s.workspaceMonthTargets).where(eq(s.workspaceMonthTargets.month, month)))[0];
+  const [settings, links, clients, overrides, wsRows, pages] = await Promise.all([
+    getSettings(), loadLinks(), db.select().from(s.clients), db.select().from(s.clientMonthTargets),
+    db.select().from(s.workspaceMonthTargets).where(eq(s.workspaceMonthTargets.month, month)), db.select().from(s.targetPages),
+  ]);
+  const ws = wsRows[0];
   const target = ws?.target ?? clients.reduce((a, c) => a + monthTargetFor(c, overrides, month).target, 0);
   const inMonth = links.filter((l) => l.month === month);
   const prog = targetProgress(links as any, month, target);
@@ -61,7 +63,6 @@ core.get("/dashboard", wrap(async (req) => {
 
   // anchor mix: rolling 3 months per target page that has links
   const start = addMonths(month, -2);
-  const pages = (await db.select().from(s.targetPages));
   const anchor = pages.map((p) => {
     const ls = links.filter((l) => l.targetPageId === p.id && l.month >= start && l.month <= month && l.verdict !== "Not relevant");
     return { targetPageId: p.id, client: clients.find((c) => c.id === p.clientId)?.name, keyword: p.keyword, linkCount: ls.length, ...anchorMix(ls, settings.anchorBands) };
@@ -104,10 +105,9 @@ const slugify = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 
 core.get("/clients", wrap(async (req) => {
   const month = monthParam(req);
-  const clients = (await db.select().from(s.clients).orderBy(s.clients.name));
-  const overrides = (await db.select().from(s.clientMonthTargets));
-  const pages = (await db.select().from(s.targetPages));
-  const links = await loadLinks();
+  const [clients, overrides, pages, links] = await Promise.all([
+    db.select().from(s.clients).orderBy(s.clients.name), db.select().from(s.clientMonthTargets), db.select().from(s.targetPages), loadLinks(),
+  ]);
   const rows = clients.map((c) => {
     const t = monthTargetFor(c, overrides, month);
     const p = targetProgress(links.filter((l) => l.clientId === c.id) as any, month, t.target);
@@ -171,8 +171,9 @@ const tpBody = z.object({
   status: z.enum(["Pending", "Approved", "Rejected"]).default("Pending"), approvalMonth: z.string().nullish(),
 });
 core.get("/target-pages", wrap(async () => {
-  const clients = new Map((await db.select().from(s.clients)).map((c) => [c.id, c]));
-  const rows = (await db.select().from(s.targetPages).orderBy(desc(s.targetPages.id))).map((t) => ({ ...t, client: clients.get(t.clientId) ?? null }));
+  const [clientRows, pageRows] = await Promise.all([db.select().from(s.clients), db.select().from(s.targetPages).orderBy(desc(s.targetPages.id))]);
+  const clients = new Map(clientRows.map((c) => [c.id, c]));
+  const rows = pageRows.map((t) => ({ ...t, client: clients.get(t.clientId) ?? null }));
   return { rows, totals: { approved: rows.filter((r) => r.status === "Approved").length, pending: rows.filter((r) => r.status === "Pending").length, rejected: rows.filter((r) => r.status === "Rejected").length, linksNeeded: rows.filter((r) => r.status !== "Rejected").reduce((a, r) => a + r.linksNeeded, 0) } };
 }));
 core.post("/target-pages/preview", wrap(async (req) => stage1(z.object({ rdsNeeded: z.number().min(0), currentRDs: z.number().min(0).default(0) }).parse(req.body).rdsNeeded)));

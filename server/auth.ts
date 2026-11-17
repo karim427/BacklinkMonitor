@@ -26,13 +26,20 @@ function readSession(token: string): number | null {
 }
 export const codeHash = (email: string, code: string) => hmac(`code:${email}:${code}`);
 
+const userCache = new Map<number, { user: AuthUser | null; until: number }>();
+export const clearUserCache = () => userCache.clear();
+
 export async function resolveUser(req: Request): Promise<AuthUser | null> {
   if (!authRequired()) return { id: 0, email: "local@dev", name: "Local dev", role: "admin" };
   const token = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
   const uid = token ? readSession(token) : null;
   if (!uid) return null;
+  const hit = userCache.get(uid);
+  if (hit && hit.until > Date.now()) return hit.user;
   const u = (await db.select().from(s.users).where(and(eq(s.users.id, uid), eq(s.users.active, true))))[0];
-  return u ? { id: u.id, email: u.email, name: u.name, role: u.role as Role } : null;
+  const user = u ? { id: u.id, email: u.email, name: u.name, role: u.role as Role } : null;
+  userCache.set(uid, { user, until: Date.now() + 15_000 }); // role/disable changes apply within 15s
+  return user;
 }
 
 /** What a non-admin may change. Everything else that isn't a GET is admin-only. */
