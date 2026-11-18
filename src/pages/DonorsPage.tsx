@@ -2,7 +2,7 @@ import { InfoTip } from "@/components/InfoTip";
 import { AdminOnly } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorBanner, Field, Input, Select } from "@/components/ui/primitives";
-import { ConfirmDialog, Dialog, Drawer } from "@/components/ui/overlays";
+import { ConfirmDialog, Dialog, Drawer, RowMenu } from "@/components/ui/overlays";
 import { del, get, post, put, useApi } from "@/lib/api";
 import { fmtDate, fmtNum } from "@/lib/utils";
 import { FilterBar, Kpi, KpiRow, PageHeader, Panel, Pager, RefreshButton, Sub, Table, TableSkeleton, THead, VerdictBadge, usePaged } from "@/features/shared/common";
@@ -105,7 +105,11 @@ export default function DonorsPage() {
                 <td>{r.localArea ?? "—"}</td>
                 <td><Badge tone={r.reuseWarning ? "amber" : "neutral"}>{r.clientsLinked} / 3</Badge>{r.reuseForPreview && <Sub>reused &lt; 6 mo</Sub>}</td>
                 <td>{fmtDate(r.lastUsedAt)}</td>
-                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <AdminOnly><Button size="sm" variant="outline" onClick={() => setEditD(r)}>Edit</Button> <Button size="sm" variant="outline" disabled={crawling === r.id} onClick={() => crawl(r.id, r.domain)} title="Read the blog with Firecrawl and check it fits the clients">{crawling === r.id ? "Reading…" : "Check blog"}</Button> <Button size="sm" variant="outline" disabled={lookingUp === r.id} onClick={() => lookup(r.id)} title="Fetch from Ahrefs (uses API units)">{lookingUp === r.id ? "…" : "Look up"}</Button> <Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></AdminOnly></td></tr>
+                <td className="whitespace-nowrap"><div className="flex items-center justify-end gap-1">
+                  <Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button>
+                  <AdminOnly><Button size="sm" variant="outline" disabled={crawling === r.id} onClick={() => crawl(r.id, r.domain)} title="Read the blog with Firecrawl and check it fits the clients">{crawling === r.id ? "Reading…" : "Check blog"}</Button>
+                    <RowMenu items={[{ label: "Edit numbers", onSelect: () => setEditD(r) }, { label: lookingUp === r.id ? "Looking up…" : "Look up on Ahrefs", onSelect: () => lookup(r.id) }, { label: "Delete", danger: true, onSelect: () => setDelT(r) }]} /></AdminOnly>
+                </div></td></tr>
             ))}</tbody></Table>
         )}
         <Pager p={pg} />

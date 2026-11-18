@@ -99,6 +99,8 @@ export const DEFAULT_SETTINGS = {
   ahrefsAutoLookup: false,
   /** Ask the AI whether each live link's page is on topic for the client (needs the AI key; costs a little per check). */
   aiPageRelevance: true,
+  /** Read each link's page with Firecrawl when verifying (1 credit): finds links added by JavaScript and judges the page and the sentence around the link. */
+  firecrawlSourceCheck: true,
   anchorBands: DEFAULT_ANCHOR_BANDS,
 };
 export type AppSettings = typeof DEFAULT_SETTINGS;

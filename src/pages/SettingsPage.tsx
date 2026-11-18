@@ -101,6 +101,8 @@ export default function SettingsPage() {
           </div>
           <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={!!s.aiPageRelevance} onChange={async (e) => { const v = e.target.checked; setS({ ...s, aiPageRelevance: v }); await save({ aiPageRelevance: v }, "Page relevance setting"); }} />
             <span>Check that each live link's page is on topic (AI)<span className="block text-xs text-zinc-500">Reads the page and rejects it as "Unrelated niche" if it clearly isn't about the client's topic. Uses a little of your AI key per check.</span></span></label>
+          <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={!!s.firecrawlSourceCheck} onChange={async (e) => { const v = e.target.checked; setS({ ...s, firecrawlSourceCheck: v }); await save({ firecrawlSourceCheck: v }, "Page reading setting"); }} />
+            <span>Read each link's page with Firecrawl<span className="block text-xs text-zinc-500">Uses 1 Firecrawl credit per check. Finds links that a plain fetch can't see (pages built with JavaScript, or blocked), and judges the page and the sentence around the link.</span></span></label>
           <Button className="mt-4" onClick={() => save({ verifierUserAgent: s.verifierUserAgent, firstRecheckDays: s.firstRecheckDays, nextRecheckDays: s.nextRecheckDays, fixWindowDays: s.fixWindowDays, defaultMonthlyTarget: s.defaultMonthlyTarget }, "Verification defaults")}>Save</Button></Card>
       </div>
 

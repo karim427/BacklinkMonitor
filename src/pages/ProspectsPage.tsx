@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input, Select, Textarea } from "@/components/ui/primitives";
-import { Dialog } from "@/components/ui/overlays";
+import { Dialog, RowMenu } from "@/components/ui/overlays";
 import { del, post, put, useApi } from "@/lib/api";
 import { fmtDate } from "@/lib/utils";
 import { OutreachDialog, CreateLinkDialog } from "@/features/prospects/OutreachDialogs";
@@ -57,7 +57,7 @@ export default function ProspectsPage() {
         {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No prospects yet" hint="Pick a client above and run discovery, or add one manually." /> : (
           <Table><THead cols={["Score", "Prospect", "Outreach", "Status", ""]} />
             <tbody>{pg.slice.map((r) => (
-              <tr key={r.id}>
+              <tr key={r.id} className="align-top">
                 <td><div className="text-lg font-semibold">{r.score}</div><Badge tone={labelTone(r.label) as any}>{r.label}</Badge></td>
                 <td className="max-w-xl"><div className="font-medium">{r.domain} <span className="font-normal text-zinc-500">· {r.client?.name}</span></div>
                   <div className="text-sm">{r.pageTitle}</div><Sub>{r.snippet}</Sub>
@@ -70,13 +70,15 @@ export default function ProspectsPage() {
                   {r.linkId && <Badge tone="green">Link created</Badge>}
                 </td>
                 <td><Select className="h-8 w-32" value={r.status} onChange={(v) => act(() => put(`/prospects/${r.id}`, { status: v }))} options={STATUSES.map((s) => ({ value: s, label: s }))} /></td>
-                <td className="whitespace-nowrap"><div className="flex gap-1">
-                  <Button size="sm" variant="ghost" asChild><a href={r.pageUrl ?? `https://${r.domain}`} target="_blank" rel="noreferrer">Open</a></Button>
+                <td className="whitespace-nowrap"><div className="flex items-center justify-end gap-1">
                   <Button size="sm" variant="outline" onClick={() => setOutreach(r)}>Outreach</Button>
-                  {!r.linkId && <Button size="sm" variant="outline" onClick={() => setLinkFor(r)}>Create link</Button>}
-                  <Button size="sm" variant="outline" onClick={() => act(() => put(`/prospects/${r.id}`, { status: "Shortlisted" }))}>Shortlist</Button>
-                  <Button size="sm" onClick={() => act(() => post(`/prospects/${r.id}/promote`), `${r.domain} added as donor — run Sync from Ahrefs on Donors to fill metrics.`)}>Add as donor</Button>
-                  <Button size="sm" variant="ghost" onClick={() => act(() => del(`/prospects/${r.id}`))}>✕</Button></div></td>
+                  {!r.linkId && <Button size="sm" onClick={() => setLinkFor(r)}>Create link</Button>}
+                  <RowMenu items={[
+                    { label: "Open site", onSelect: () => window.open(r.pageUrl ?? `https://${r.domain}`, "_blank") },
+                    { label: "Shortlist", onSelect: () => act(() => put(`/prospects/${r.id}`, { status: "Shortlisted" })) },
+                    { label: "Add as donor only", onSelect: () => act(() => post(`/prospects/${r.id}/promote`), `${r.domain} added as donor. Add its numbers on the Donors page.`) },
+                    { label: "Remove", danger: true, onSelect: () => act(() => del(`/prospects/${r.id}`)) },
+                  ]} /></div></td>
               </tr>
             ))}</tbody></Table>
         )}

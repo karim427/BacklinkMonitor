@@ -16,6 +16,7 @@ import { autoLookupEnabled } from "../services/donorMetrics.js";
 import { listLost, refreshLost } from "../services/ahrefsLost.js";
 import { previewDemoData, removeDemoData } from "../services/demoData.js";
 import { fetchUsage } from "../services/ahrefsUsageApi.js";
+import { allSourceChecks } from "../services/sourceCheckStore.js";
 
 export const core = Router();
 
@@ -33,9 +34,9 @@ const addMonths = (m: string, n: number) => { const [y, mo] = m.split("-").map(N
 
 /* ---------------- enrichment ---------------- */
 export async function loadLinks() {
-  const [rows, clientRows, donorRows, pageRows, errRuns] = await Promise.all([
+  const [rows, clientRows, donorRows, pageRows, errRuns, checks] = await Promise.all([
     db.select().from(s.links).orderBy(desc(s.links.placedAt)), db.select().from(s.clients), db.select().from(s.donors), db.select().from(s.targetPages),
-    db.select({ linkId: s.checkRuns.linkId, error: s.checkRuns.error }).from(s.checkRuns).where(isNotNull(s.checkRuns.error)).orderBy(desc(s.checkRuns.ranAt)).limit(300),
+    db.select({ linkId: s.checkRuns.linkId, error: s.checkRuns.error }).from(s.checkRuns).where(isNotNull(s.checkRuns.error)).orderBy(desc(s.checkRuns.ranAt)).limit(300), allSourceChecks(),
   ]);
   const lastError = new Map<number, string>();
   for (const r of errRuns) if (r.error && !lastError.has(r.linkId)) lastError.set(r.linkId, r.error);
@@ -45,6 +46,7 @@ export async function loadLinks() {
   const now = new Date();
   return rows.map((l) => ({
     ...l,
+    sourceCheck: checks.get(l.id) ?? null,
     lastError: l.verificationStatus === "Error" ? lastError.get(l.id) ?? null : null,
     month: linkMonth({ verdict: l.verdict as any, placedAt: l.placedAt, createdAt: l.createdAt }),
     client: cl.get(l.clientId) ?? null, donor: dn.get(l.donorId) ?? null, targetPage: l.targetPageId ? tp.get(l.targetPageId) ?? null : null,
@@ -217,7 +219,7 @@ export const linkBody = z.object({
 });
 async function resolveDonor(b: { donorId?: number | null; donorDomain?: string | null; sourceUrl: string }, clientId: number) {
   if (b.donorId) return b.donorId;
-  const domain = (b.donorDomain || hostOf(b.sourceUrl)).replace(/^www\./, "");
+  const domain = hostOf(b.donorDomain || b.sourceUrl); // always a bare domain, even if someone pastes a full URL
   const found = (await db.select().from(s.donors).where(eq(s.donors.domain, domain)))[0];
   if (found) return found.id;
   const client = (await db.select().from(s.clients).where(eq(s.clients.id, clientId)))[0];
@@ -429,7 +431,7 @@ core.put("/settings/ahrefs-key", wrap(async (req) => {
 core.put("/settings", wrap(async (req) => {
   const b = z.object({
     verifierUserAgent: z.string().min(1), firstRecheckDays: z.number().int().min(1), nextRecheckDays: z.number().int().min(1),
-    fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0), ahrefsAutoLookup: z.boolean(), aiPageRelevance: z.boolean(),
+    fixWindowDays: z.number().int().min(1), defaultMonthlyTarget: z.number().int().min(0), ahrefsAutoLookup: z.boolean(), aiPageRelevance: z.boolean(), firecrawlSourceCheck: z.boolean(),
     anchorBands: z.object({ Branded: bandSchema, Partial: bandSchema, Natural: bandSchema, Exact: bandSchema }),
   }).partial().parse(req.body);
   if (b.anchorBands) { const err = validateBands(b.anchorBands as AnchorBands); if (err) throw new HttpError(400, err); }

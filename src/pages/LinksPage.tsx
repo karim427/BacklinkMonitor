@@ -8,6 +8,8 @@ import { cn, fmtDate, monthLabel, ruleLabel } from "@/lib/utils";
 import { PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, ActionBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
 import { ExportDialog } from "@/features/links/ExportDialog";
+import { PageCheckDialog } from "@/features/links/PageCheckDialog";
+import { ahrefsReadyOn } from "@server/services/sourceCheck";
 import { StatusSelect } from "@/features/links/StatusSelect";
 import { PRE_LIVE, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
 import { InfoTip } from "@/components/InfoTip";
@@ -19,7 +21,7 @@ export default function LinksPage() {
   const [f, setF] = useState({ ...blank, client: sp.get("client") ?? "", month: sp.get("month") ?? "" });
   // Months are dropdowns: the newest (or the one picked in the Month filter) starts open.
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState(false); const [pageCheck, setPageCheck] = useState<any | null>(null);
   const [edit, setEdit] = useState<any | null>(null); const [delTarget, setDel] = useState<any | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null); const [rowErr, setRowErr] = useState<string | null>(null);
   const [imp, setImp] = useState<{ created: number; errors: any[] } | null>(null);
@@ -90,25 +92,24 @@ export default function LinksPage() {
                       <>Verdict<InfoTip text="Is the link any good? Relevant counts toward the target. Judged only once the link is live." to="/guide#verdict" /></>,
                       <>Status<InfoTip text="Where the link is: Pending, In process, Live, Replace, Lost or Rejected. Click it to change." to="/guide#status" /></>,
                       <>Check<InfoTip text="Verified only means the page was opened and read. It does not mean your link was found." to="/guide#checks" /></>,
-                      "Last checked", ""]} />
+                      ""]} />
                     <tbody>
               {ls.map((l) => (
-                <tr key={l.id}>
+                <tr key={l.id} className="align-top">
                   <td><div className="font-medium">{l.client?.name}</div><Sub>{l.client?.cluster}</Sub></td>
-                  <td className="max-w-56"><div className="truncate">{l.targetPage?.keyword ?? "—"}</div><Sub><span className="block truncate">{l.targetUrl}</span></Sub></td>
+                  <td className="max-w-44"><div className="truncate">{l.targetPage?.keyword ?? "—"}</div><Sub><span className="block truncate">{l.targetUrl}</span></Sub></td>
                   <td><div>{l.donor?.domain}</div><Sub>{l.donor && !l.donor.ahrefsSyncedAt && !l.donor.dr && !l.donor.organicTraffic ? "Traffic not checked yet" : `DR ${l.donor?.dr} · ${l.donor?.usTrafficPct}% US · ${(l.donor?.organicTraffic ?? 0).toLocaleString("en-US")} visits · ${l.donor?.referringDomains} RDs`}</Sub></td>
                   <td><div>{l.anchorText || "—"}</div><Sub>{l.anchorType}</Sub></td>
                   <td>{l.action === "REJECTED" ? <><VerdictBadge v="Not relevant" /><Sub>Rejected by hand</Sub></>
                     : PRE_LIVE.includes(l.action) ? <><span className="text-zinc-400">—</span><Sub>Judged once live</Sub></>
                     : l.verdict === "Not judged" ? <span className="inline-flex items-center"><span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">Needs donor numbers</span><InfoTip text="This site has no DR or traffic numbers yet. Add them on the Donors page (Edit) or use Look up, then click Verify now." to="/guide#verdict" /></span>
                     : <VerdictBadge v={l.verdict} />}
-                    {l.verdict !== "Not judged" && !PRE_LIVE.includes(l.action) && !!l.rejectReasons?.length && <div title={l.rejectReasons.map(ruleLabel).join("\n")} className="mt-1 max-w-[14rem] space-y-0.5"><Sub><span className="line-clamp-2">{ruleLabel(l.rejectReasons[0])}</span></Sub>{l.rejectReasons.length > 1 && <Sub>+{l.rejectReasons.length - 1} more</Sub>}</div>}</td>
+                    {l.verdict !== "Not judged" && !PRE_LIVE.includes(l.action) && !!l.rejectReasons?.length && (() => { const rs = [...l.rejectReasons].sort((a: string, b: string) => Number(a === "donor_metrics_missing") - Number(b === "donor_metrics_missing")); return <div title={rs.map(ruleLabel).join("\n")} className="mt-1 max-w-[14rem] space-y-0.5">{rs.slice(0, 2).map((c: string) => <Sub key={c}><span className="line-clamp-2">{ruleLabel(c)}</span></Sub>)}{rs.length > 2 && <Sub>+{rs.length - 2} more</Sub>}</div>; })()}{l.sourceCheck?.scored && <button type="button" onClick={() => setPageCheck(l)} className="mt-1 block text-left text-xs text-blue-600 hover:underline">Page fit {l.sourceCheck.fit} · link context {l.sourceCheck.context ? l.sourceCheck.contextFit : "—"}</button>}</td>
                   <td><div className="flex flex-col items-start gap-1"><StatusSelect link={l} onChanged={reload} />{l.stage === "Confirmed" && <span title="Passed the 30-day recheck" className="rounded-md border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">✓ Confirmed</span>}</div></td>
-                  <td><VerifBadge v={l.verificationStatus} />{PRE_LIVE.includes(l.action) && l.lastCheckedAt && <div className="mt-1 max-w-[14rem] text-xs text-zinc-500">Checked: the link isn't on the page yet</div>}{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div></td>
-                  <td className="whitespace-nowrap text-zinc-600">{fmtDate(l.lastCheckedAt)}</td>
+                  <td><VerifBadge v={l.verificationStatus} />{PRE_LIVE.includes(l.action) && l.lastCheckedAt && <div className="mt-1 max-w-[10rem] text-xs text-zinc-500">Not on the page yet</div>}{!PRE_LIVE.includes(l.action) && (() => { const d = ahrefsReadyOn(l.sourceCheck?.publishedAt, l.placedAt); return d && d > new Date() ? <div title="Ahrefs needs about a month to crawl a new page or link. Our own check works now; Ahrefs-based reports (lost links) will include it after this date." className="mt-1 max-w-[10rem] text-xs text-amber-700">Ahrefs: not before {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div> : null; })()}{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div>{l.lastCheckedAt && <div className="mt-1 text-xs text-zinc-400">Checked {fmtDate(l.lastCheckedAt)}</div>}</td>
                   <td><div className="flex items-center gap-1">
                     <Button size="sm" variant="outline" disabled={busyId === l.id} onClick={() => verify(l.id)}>{busyId === l.id ? "Checking…" : "Verify now"}</Button>
-                    <RowMenu items={[{ label: "Edit link", onSelect: () => setEdit(l) }, { label: "Open source", onSelect: () => window.open(l.sourceUrl, "_blank") }, { label: "Delete", danger: true, onSelect: () => setDel(l) }]} />
+                    <RowMenu items={[{ label: "Edit link", onSelect: () => setEdit(l) }, { label: "Page check", onSelect: () => setPageCheck(l) }, { label: "Open source", onSelect: () => window.open(l.sourceUrl, "_blank") }, { label: "Delete", danger: true, onSelect: () => setDel(l) }]} />
                   </div></td>
                 </tr>
               ))}
@@ -120,6 +121,7 @@ export default function LinksPage() {
           })
         )}
       </Panel>
+      <PageCheckDialog link={pageCheck} onClose={() => setPageCheck(null)} />
       <ExportDialog open={exporting} onOpenChange={setExporting} links={rows} defaultClient={f.client} defaultMonth={f.month} />
       <LinkDialog open={sp.get("new") === "1" || !!edit} link={edit} onOpenChange={(o) => { if (!o) { setEdit(null); if (sp.get("new")) { sp.delete("new"); setSp(sp, { replace: true }); } } }} onSaved={reload} />
       <ConfirmDialog open={!!delTarget} onOpenChange={(o) => !o && setDel(null)} title="Delete this link?" description={delTarget?.sourceUrl} onConfirm={async () => { await del(`/links/${delTarget.id}`); reload(); }} />

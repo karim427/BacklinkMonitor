@@ -2,7 +2,12 @@ import { and, eq, ne, gte, inArray } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
 import { CLUSTERS, DEFAULT_SETTINGS, PRE_LIVE, type AppSettings, type Cluster } from "./constants.js";
 import { applyRecheck, evaluateRejectRules, fixWindowEnd, scheduleFirstCheck, verdictFor, type DonorMetrics, type LinkFacts } from "./rules.js";
-import { verifyLink } from "./verifier.js";
+import { detectPublishDate, parseHtml, verifyLink, type VerifyOutput } from "./verifier.js";
+import { aiConfigured, chat, extractJson } from "./ai.js";
+import { getFirecrawlKey } from "./secrets.js";
+import { scrapeRaw } from "./firecrawlApi.js";
+import { extractLinkContext, parsePageVerdict, sourcePrompt } from "./sourceCheck.js";
+import { saveSourceCheck } from "./sourceCheckStore.js";
 import { ensureFreshMetrics } from "./donorMetrics.js";
 import { pageIsUnrelated } from "./pageRelevance.js";
 import { donorFitFor } from "./donorCrawl.js";
@@ -49,7 +54,18 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
   (await db.update(s.links).set({ verificationStatus: "Checking" }).where(eq(s.links.id, linkId)));
 
   const competitorDomains = (await db.select().from(s.clients).where(and(eq(s.clients.cluster, client.cluster), ne(s.clients.id, client.id)))).map((c) => c.domain);
-  const v = await verifyLink({ sourceUrl: link.sourceUrl, targetUrl: link.targetUrl, userAgent: settings.verifierUserAgent, competitorDomains }, fetchImpl);
+  const vin = { sourceUrl: link.sourceUrl, targetUrl: link.targetUrl, userAgent: settings.verifierUserAgent, competitorDomains };
+  let v: VerifyOutput = await verifyLink(vin, fetchImpl);
+  // Read this exact page with Firecrawl: it renders JavaScript and gets past blocks, so a link a plain fetch missed can still be found, and the page can be judged.
+  const fcKey = settings.firecrawlSourceCheck ? await getFirecrawlKey() : null;
+  let scraped: Awaited<ReturnType<typeof scrapeRaw>> | null = null; let via: "firecrawl" | "fetch" = "fetch";
+  if (fcKey) {
+    try { scraped = await scrapeRaw(link.sourceUrl, fcKey); } catch { scraped = null; }
+    if (scraped?.html && (!v.ok || !v.linkFound)) {
+      const v2 = parseHtml(scraped.html, vin);
+      if (v2.linkFound) { v = { ok: true, httpStatus: scraped.statusCode ?? 200, ...v2 }; via = "firecrawl"; }
+    }
+  }
   const now = new Date();
 
   if (!v.ok) {
@@ -74,7 +90,21 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
   };
   facts.donorFit = await donorFitFor(donor.id, client.cluster);
   facts.canonicalElsewhere = v.canonicalElsewhere; facts.pageNofollow = v.pageNofollow; facts.sponsoredLabel = v.sponsoredLabel;
-  if (v.linkFound && settings.aiPageRelevance) facts.pageUnrelated = await pageIsUnrelated(client, v.pageTitle, v.pageText);
+  const publishedAt = v.publishedAt ?? (scraped?.published ? new Date(scraped.published).toISOString() : null) ?? (scraped?.html ? detectPublishDate(scraped.html, link.sourceUrl) : null);
+  if (v.linkFound && settings.aiPageRelevance) {
+    if (scraped && scraped.markdown.length > 200) {
+      // Judge this exact page and the sentence the link sits in.
+      const ctx = extractLinkContext(scraped.markdown, link.targetUrl, v.anchorFound ?? link.anchorText);
+      const tp = link.targetPageId ? (await db.select().from(s.targetPages).where(eq(s.targetPages.id, link.targetPageId)))[0] : null;
+      let verdict: ReturnType<typeof parsePageVerdict> = null;
+      if (aiConfigured()) {
+        try { const p = sourcePrompt({ clientName: client.name, cluster: client.cluster, targetUrl: link.targetUrl, keyword: tp?.keyword, title: scraped.title, text: scraped.markdown, context: ctx }); verdict = parsePageVerdict(extractJson<any>(await chat([{ role: "system", content: p.system }, { role: "user", content: p.user }], { json: true }))); } catch { verdict = null; }
+      }
+      if (verdict) { facts.pageUnrelated = verdict.fit < 35; facts.pageThin = verdict.quality === "thin" || verdict.quality === "ai"; }
+      await saveSourceCheck(linkId, { ...(verdict ?? { fit: 0, contextFit: 0, quality: "good" as const, reason: "The AI could not judge this page." }), scored: !!verdict, at: new Date().toISOString(), title: scraped.title, context: ctx, via, publishedAt });
+    } else facts.pageUnrelated = await pageIsUnrelated(client, v.pageTitle, v.pageText);
+  }
+  if (publishedAt && !(scraped && scraped.markdown.length > 200 && v.linkFound && settings.aiPageRelevance)) await saveSourceCheck(linkId, { fit: 0, contextFit: 0, quality: "good", reason: "", scored: false, at: new Date().toISOString(), title: v.pageTitle ?? "", context: "", via, publishedAt });
   const rejects = v.linkFound ? evaluateRejectRules(facts) : [];
   const isRecheck = !preLive && !!link.lastCheckedAt && link.stage !== "Intake";
   const patch: Partial<typeof s.links.$inferInsert> = { verificationStatus: "Verified", lastCheckedAt: now, rejectReasons: rejects };

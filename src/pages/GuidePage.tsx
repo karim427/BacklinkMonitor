@@ -29,6 +29,8 @@ const SECTIONS: Section[] = [
     ["Link details", "rel (nofollow, sponsored, ugc), where it sits (body, footer, sidebar, author bio), how many outgoing links the page has, anchor text."],
     ["Page checks", "noindex, canonical pointing elsewhere, page-wide nofollow, a 'Sponsored' label, and a competitor linked on the same page."],
     ["On topic (AI)", "Reads the page and rejects it if it clearly isn't about the client's topic. You can switch this off in Settings."],
+    ["Page check (each link's own page)", "With a Firecrawl key, every check also reads the exact page the link is on (not just the site). It sees links built by JavaScript or hidden from a plain fetch, then the AI scores how well the page fits the client, how naturally the link reads in its sentence, and the content quality. Open it from the row's ... menu > Page check. A page under 35 is rejected as an unrelated niche."],
+    ["Too new for Ahrefs", "Ahrefs needs about a month to crawl a new page or a newly added link. Our own check (reading the page directly) works the moment you click Verify now, but Ahrefs-based things, such as the Lost links list, can't include a link until it has crawled it. The date shown is the later of when the page was published and when the link went live, plus about 30 days."],
     ["Donor rules", "US traffic, DR, traffic minimum, linked-to-referring domains, reuse limits. These use the donor's numbers."],
     ["Check badge", "Verified only means the page was opened and read. It does not mean the link was found. The Verdict says that."],
     ["Error", "The page couldn't be opened (site down, blocked, timed out). The old verdict is kept and the reason is shown."],

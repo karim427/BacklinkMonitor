@@ -103,7 +103,7 @@ export default function DashboardPage() {
           <div className="mb-1 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">Lost links</h2>
             <div className="flex gap-2"><AdminOnly><Button size="sm" variant="outline" disabled={checking} onClick={checkLost}>{checking ? "Asking Ahrefs…" : "Check Ahrefs"}</Button></AdminOnly>
               <Button size="sm" variant="outline" asChild><Link to="/links?">View links</Link></Button></div></div>
-          <p className="mb-2 text-xs text-zinc-500">Reported lost by Ahrefs in the last 60 days{lost?.fetchedAt ? ` · checked ${new Date(lost.fetchedAt).toLocaleDateString()}` : ""}</p>
+          <p className="mb-2 text-xs text-zinc-500">Reported lost by Ahrefs in the last 60 days. Links on pages newer than about a month may not show here yet{lost?.fetchedAt ? ` · checked ${new Date(lost.fetchedAt).toLocaleDateString()}` : ""}</p>
           {lostMsg && <p className="mb-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-700">{lostMsg}</p>}
           {!!lost?.errors?.length && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{lost.errors.slice(0, 2).join(" · ")}</p>}
           {lost && !lost.hasKey ? <EmptyState title="Ahrefs isn't connected" hint="Add your Ahrefs API key in Settings to see links Ahrefs reports as lost." />

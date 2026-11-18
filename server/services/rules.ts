@@ -79,6 +79,8 @@ export interface LinkFacts {
   canonicalElsewhere?: boolean; pageNofollow?: boolean; sponsoredLabel?: boolean; pageUnrelated?: boolean;
   /** How well the donor's whole blog fits the client's cluster (0-100), from reading it with Firecrawl. Overrides the cluster/niche guess when present. */
   donorFit?: number | null;
+  /** This exact page looks thin or AI-generated (from reading it with Firecrawl). */
+  pageThin?: boolean;
   // contextual
   donor: DonorMetrics; clientCluster: Cluster; sourceUrl: string;
   clientId?: number;
@@ -120,7 +122,7 @@ export function evaluateRejectRules(f: LinkFacts): string[] {
   add(d.flags?.pbn, "quality_pbn");
   add(f.indexed === false, "quality_not_indexed");
   add(d.flags?.hacked, "quality_hacked");
-  add(d.flags?.thinAi, "quality_thin_ai");
+  add(d.flags?.thinAi || f.pageThin, "quality_thin_ai");
 
   add((f.rel ?? []).some((r) => ["nofollow", "sponsored", "ugc"].includes(r.toLowerCase())), "link_nofollow_paid");
   add(["Footer", "Sidebar", "Author bio"].includes(f.placement ?? ""), "link_footer_sidebar_bio");
