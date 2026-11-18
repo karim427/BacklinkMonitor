@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ahrefsReadyOn, extractLinkContext, parsePageVerdict, sourcePrompt } from "./sourceCheck.js";
+import { ahrefsReadyOn, extractLinkContext, parsePageVerdict, rejectsAsThin, sourcePrompt, wordCount } from "./sourceCheck.js";
 import { scrapeRaw } from "./firecrawlApi.js";
 
 const md = `# 10 chatbot ideas for your site\n\nIntro text about customer support and automation.\n\n## Chatbot examples that work\n\nIf you want inspiration, these [chatbot examples](https://www.isometrik.ai/blog/chatbot-examples/) show how brands answer questions fast.\n\nAnother paragraph.`;
@@ -33,4 +33,18 @@ describe("when Ahrefs can know about a link", () => {
     expect(ahrefsReadyOn("2026-11-10T00:00:00Z", "2026-10-01T00:00:00Z")!.toISOString().slice(0, 10)).toBe("2026-12-10");
   });
   it("copes with one or neither date", () => { expect(ahrefsReadyOn(null, "2026-11-01T00:00:00Z")!.toISOString().slice(0, 10)).toBe("2026-12-01"); expect(ahrefsReadyOn(null, null)).toBeNull(); });
+});
+
+describe("thin pages", () => {
+  it("counts words", () => expect(wordCount("one two  three\nfour")).toBe(4));
+  it("rejects only a really short page that the AI calls thin", () => {
+    expect(rejectsAsThin({ quality: "thin" }, 200)).toBe(true);
+    expect(rejectsAsThin({ quality: "thin" }, 1800)).toBe(false); // the AI only saw an excerpt
+    expect(rejectsAsThin({ quality: "ai" }, 100)).toBe(false);   // AI-style is a warning only
+    expect(rejectsAsThin({ quality: "good" }, 50)).toBe(false);
+  });
+  it("tells the AI the real length of the page", () => {
+    const p = sourcePrompt({ clientName: "C", cluster: "Tech / SaaS", targetUrl: "https://x.com", title: "T", text: "excerpt", context: "", words: 1800 });
+    expect(p.user).toContain("Words on the whole page: 1800"); expect(p.system).toContain("FIRST PART");
+  });
 });

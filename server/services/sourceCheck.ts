@@ -2,7 +2,7 @@ import { CLUSTER_NICHES, type Cluster } from "./constants.js";
 
 /** Pure helpers for judging the exact page a link sits on (not just the site). */
 export interface PageVerdict { fit: number; contextFit: number; quality: "good" | "thin" | "ai" | "spam"; reason: string }
-export interface SourceCheck extends PageVerdict { at: string; title: string; context: string; via: "firecrawl" | "fetch"; scored: boolean; /** When the page was published (ISO), if the page says. */ publishedAt?: string | null }
+export interface SourceCheck extends PageVerdict { at: string; title: string; context: string; via: "firecrawl" | "fetch"; scored: boolean; /** Words on the whole page (main content). */ words?: number; /** When the page was published (ISO), if the page says. */ publishedAt?: string | null }
 
 /** Ahrefs only lists a link after it has crawled the page, which can take about a month. This is the first day it can be expected to know a link: the later of when the page was published and when the link went live, plus the lag. */
 export function ahrefsReadyOn(publishedAt: string | null | undefined, liveSince: string | Date | null | undefined, lagDays = 30): Date | null {
@@ -25,11 +25,16 @@ export function extractLinkContext(markdown: string, targetUrl: string, anchorTe
   return heading && !blocks[i].startsWith("#") ? `${heading}: ${para}` : para;
 }
 
-export function sourcePrompt(a: { clientName: string; cluster: string; targetUrl: string; keyword?: string | null; title: string; text: string; context: string }) {
+export const wordCount = (text: string) => (text.match(/\S+/g) ?? []).length;
+
+/** Only a genuinely short page is rejected as thin. "AI-style" is a warning, not a reason to reject: that call is too unreliable. */
+export const rejectsAsThin = (v: Pick<PageVerdict, "quality">, words: number) => v.quality === "thin" && words < 350;
+
+export function sourcePrompt(a: { clientName: string; cluster: string; targetUrl: string; keyword?: string | null; title: string; text: string; context: string; words?: number }) {
   const niches = CLUSTER_NICHES[a.cluster as Cluster]?.join(", ") ?? a.cluster;
   return {
-    system: 'You judge ONE web page that links to a client\'s website, for a link-building team. Reply ONLY JSON: {"fit":0-100,"contextFit":0-100,"quality":"good"|"thin"|"ai"|"spam","reason":"one short sentence"}. "fit" = how well the page\'s topic matches the client\'s business and the page being linked to (70+ clearly relevant, 40-69 loosely, under 40 unrelated). "contextFit" = does the sentence around the link read naturally and relate to what the link points to (0 if no context is given). "quality": "good" = real useful article; "thin" = very short or filler; "ai" = generic mass-produced AI-style text; "spam" = casino, pills, loans, adult or link-farm style.',
-    user: `Client: ${a.clientName} (${a.cluster}: ${niches}).\nThe link points to: ${a.targetUrl}${a.keyword ? ` (target keyword: ${a.keyword})` : ""}\n\nPage title: ${a.title}\nSentence/paragraph around the link: ${a.context || "(not found in the page text)"}\n\nPage text:\n${a.text.slice(0, 3500)}`,
+    system: 'You judge ONE web page that links to a client\'s website, for a link-building team. Reply ONLY JSON: {"fit":0-100,"contextFit":0-100,"quality":"good"|"thin"|"ai"|"spam","reason":"one short sentence"}. "fit" = how well the page\'s topic matches the client\'s business and the page being linked to (70+ clearly relevant, 40-69 loosely, under 40 unrelated). "contextFit" = does the sentence around the link read naturally and relate to what the link points to (0 if no context is given). "quality": "good" = real useful article; "thin" = very short (under about 300 words) or pure filler; you are shown only the FIRST PART of long pages, so never call a page thin just because the excerpt is short: use the stated word count; "ai" = generic mass-produced AI-style text; "spam" = casino, pills, loans, adult or link-farm style.',
+    user: `Client: ${a.clientName} (${a.cluster}: ${niches}).\nThe link points to: ${a.targetUrl}${a.keyword ? ` (target keyword: ${a.keyword})` : ""}\n\nPage title: ${a.title}\nWords on the whole page: ${a.words ?? "unknown"}\nSentence/paragraph around the link: ${a.context || "(not found in the page text)"}\n\nFirst part of the page text:\n${a.text.slice(0, 3500)}`,
   };
 }
 

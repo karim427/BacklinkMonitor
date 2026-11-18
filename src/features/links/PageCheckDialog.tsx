@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/primitives";
 import { ahrefsReadyOn } from "@server/services/sourceCheck";
 
 const tone = (n: number) => (n >= 60 ? "text-green-700" : n >= 35 ? "text-amber-700" : "text-red-600");
-const Q: Record<string, string> = { good: "Real, useful content", thin: "Thin or filler content", ai: "Generic AI-style text", spam: "Spam-like" };
+const Q: Record<string, string> = { good: "Real, useful content", thin: "Thin or filler content", ai: "Generic AI-style text (warning only)", spam: "Spam-like" };
 
 /** What reading this link's exact page found: how well the page fits, how the link reads in its sentence, and the quality. */
 export function PageCheckDialog({ link, onClose }: { link: any | null; onClose: () => void }) {
@@ -24,9 +24,10 @@ export function PageCheckDialog({ link, onClose }: { link: any | null; onClose: 
               <div className="rounded-lg border border-zinc-200 p-3"><p className="text-xs text-zinc-500">Content quality</p><p className={`text-base font-semibold ${c.quality === "good" ? "text-green-700" : "text-red-600"}`}>{Q[c.quality] ?? c.quality}</p></div>
             </div>) : <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">{c.reason} Check that your AI account has credits.</p>}
           {c.scored && c.reason && <p><b>Why:</b> {c.reason}</p>}
+          {c.words != null && <p className="text-zinc-600"><b>Length:</b> about {Number(c.words).toLocaleString("en-US")} words{c.words < 350 ? " (short)" : ""}</p>}
           <div><p className="mb-1 text-xs font-medium text-zinc-600">Where the link sits</p>
             {c.context ? <blockquote className="rounded-md border-l-4 border-zinc-300 bg-zinc-50 px-3 py-2 text-zinc-700">{c.context}</blockquote> : <p className="text-zinc-500">The link's sentence wasn't found in the page text.</p>}</div>
-          <p className="text-xs text-zinc-500">A page that fits the client under 35 is rejected as an unrelated niche. Thin or AI-style pages fail the quality rule.</p>
+          <p className="text-xs text-zinc-500">A page that fits the client under 35 is rejected as an unrelated niche. A page is rejected as thin only if the AI calls it thin and it has under about 350 words. AI-style text is a warning only.</p>
         </div>)}
       <div className="mt-4 flex justify-end gap-2"><Button variant="outline" asChild><a href={link?.sourceUrl} target="_blank" rel="noreferrer">Open page</a></Button><Button onClick={onClose}>Close</Button></div>
     </Dialog>

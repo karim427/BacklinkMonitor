@@ -6,7 +6,7 @@ import { detectPublishDate, parseHtml, verifyLink, type VerifyOutput } from "./v
 import { aiConfigured, chat, extractJson } from "./ai.js";
 import { getFirecrawlKey } from "./secrets.js";
 import { scrapeRaw } from "./firecrawlApi.js";
-import { extractLinkContext, parsePageVerdict, sourcePrompt } from "./sourceCheck.js";
+import { extractLinkContext, parsePageVerdict, rejectsAsThin, sourcePrompt, wordCount } from "./sourceCheck.js";
 import { saveSourceCheck } from "./sourceCheckStore.js";
 import { ensureFreshMetrics } from "./donorMetrics.js";
 import { pageIsUnrelated } from "./pageRelevance.js";
@@ -96,12 +96,12 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
       // Judge this exact page and the sentence the link sits in.
       const ctx = extractLinkContext(scraped.markdown, link.targetUrl, v.anchorFound ?? link.anchorText);
       const tp = link.targetPageId ? (await db.select().from(s.targetPages).where(eq(s.targetPages.id, link.targetPageId)))[0] : null;
-      let verdict: ReturnType<typeof parsePageVerdict> = null;
+      const words = wordCount(scraped.markdown); let verdict: ReturnType<typeof parsePageVerdict> = null;
       if (aiConfigured()) {
-        try { const p = sourcePrompt({ clientName: client.name, cluster: client.cluster, targetUrl: link.targetUrl, keyword: tp?.keyword, title: scraped.title, text: scraped.markdown, context: ctx }); verdict = parsePageVerdict(extractJson<any>(await chat([{ role: "system", content: p.system }, { role: "user", content: p.user }], { json: true }))); } catch { verdict = null; }
+        try { const p = sourcePrompt({ clientName: client.name, cluster: client.cluster, targetUrl: link.targetUrl, keyword: tp?.keyword, title: scraped.title, text: scraped.markdown, context: ctx, words }); verdict = parsePageVerdict(extractJson<any>(await chat([{ role: "system", content: p.system }, { role: "user", content: p.user }], { json: true }))); } catch { verdict = null; }
       }
-      if (verdict) { facts.pageUnrelated = verdict.fit < 35; facts.pageThin = verdict.quality === "thin" || verdict.quality === "ai"; }
-      await saveSourceCheck(linkId, { ...(verdict ?? { fit: 0, contextFit: 0, quality: "good" as const, reason: "The AI could not judge this page." }), scored: !!verdict, at: new Date().toISOString(), title: scraped.title, context: ctx, via, publishedAt });
+      if (verdict) { facts.pageUnrelated = verdict.fit < 35; facts.pageThin = rejectsAsThin(verdict, words); }
+      await saveSourceCheck(linkId, { ...(verdict ?? { fit: 0, contextFit: 0, quality: "good" as const, reason: "The AI could not judge this page." }), scored: !!verdict, at: new Date().toISOString(), title: scraped.title, context: ctx, via: "firecrawl", words, publishedAt });
     } else facts.pageUnrelated = await pageIsUnrelated(client, v.pageTitle, v.pageText);
   }
   if (publishedAt && !(scraped && scraped.markdown.length > 200 && v.linkFound && settings.aiPageRelevance)) await saveSourceCheck(linkId, { fit: 0, contextFit: 0, quality: "good", reason: "", scored: false, at: new Date().toISOString(), title: v.pageTitle ?? "", context: "", via, publishedAt });

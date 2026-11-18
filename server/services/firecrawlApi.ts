@@ -27,7 +27,7 @@ export async function scrapePage(url: string, key: string, fetchImpl: typeof fet
 
 /** One call for a link's page: the rendered HTML (so links added by JavaScript are seen) and the clean text. 1 credit. */
 export async function scrapeRaw(url: string, key: string, fetchImpl: typeof fetch = fetch): Promise<ScrapedPage & { html: string }> {
-  const j = await call("POST", "/scrape", key, { url, formats: ["markdown", "rawHtml"], onlyMainContent: false, timeout: 25_000 }, fetchImpl, 35_000);
+  const j = await call("POST", "/scrape", key, { url, formats: ["markdown", "rawHtml"], onlyMainContent: true, timeout: 25_000 }, fetchImpl, 35_000);
   const d = j.data ?? {}; const t = d.metadata?.title;
   const m = d.metadata ?? {}; const pub = m.publishedTime ?? m["article:published_time"] ?? m.ogArticlePublishedTime ?? m.datePublished ?? m["og:article:published_time"] ?? null;
   return { url, title: Array.isArray(t) ? String(t[0] ?? "") : String(t ?? ""), markdown: String(d.markdown ?? ""), html: String(d.rawHtml ?? d.html ?? ""), statusCode: m.statusCode ?? null, published: Array.isArray(pub) ? pub[0] : pub };
