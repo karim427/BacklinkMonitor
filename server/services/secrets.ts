@@ -18,7 +18,7 @@ function decrypt(blob: string): string | null {
   } catch { return null; } // e.g. SESSION_SECRET changed
 }
 
-type Secrets = { ahrefs?: string };
+type Secrets = { ahrefs?: string; firecrawl?: string };
 const readRow = async () => ((await db.select().from(s.settings).where(eq(s.settings.key, "secrets")))[0]?.value ?? {}) as Secrets;
 
 let cache: { key: string | null; until: number } | null = null;
@@ -53,4 +53,19 @@ export async function checkAhrefsKey(key: string): Promise<"valid" | "invalid" |
     if (r.ok) return "valid";
     return r.status === 401 || r.status === 403 ? "invalid" : "unknown";
   } catch { return "unknown"; }
+}
+
+/* ---- Firecrawl (reads donor sites, including pages that need JavaScript) ---- */
+export async function getFirecrawlKey(): Promise<string | null> {
+  const row = await readRow();
+  return (row.firecrawl ? decrypt(row.firecrawl) : null) || process.env.FIRECRAWL_API_KEY || null;
+}
+export async function firecrawlStatus() {
+  const row = await readRow(); const saved = row.firecrawl ? decrypt(row.firecrawl) : null; const key = saved || process.env.FIRECRAWL_API_KEY || null;
+  return { connected: !!key, source: saved ? "settings" : process.env.FIRECRAWL_API_KEY ? "env" : null, last4: key ? key.slice(-4) : null };
+}
+export async function setFirecrawlKey(key: string | null) {
+  const row = await readRow(); const next: Secrets = { ...row };
+  if (key) next.firecrawl = encrypt(key); else delete next.firecrawl;
+  await db.insert(s.settings).values({ key: "secrets", value: next }).onConflictDoUpdate({ target: s.settings.key, set: { value: next } });
 }

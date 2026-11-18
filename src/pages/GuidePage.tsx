@@ -56,6 +56,7 @@ const SECTIONS: Section[] = [
     ["Organic traffic", "Monthly visits from search. Minimum 1,000, or 300 for local sites."],
     ["Clients x / 3", "How many different clients this site already links to. More than 3 is rejected, because it looks like a link network."],
     ["Reused < 6 mo", "The same donor was already used for the same client in the last 6 months."],
+    ["Check blog", "Reads a few real posts from the donor's blog with Firecrawl (about 6 credits), then the AI says what the site is about and how well it fits each client cluster. A site that clearly doesn't fit (under 35) fails the niche rule. It also notes thin or AI-like content, spam signs and sites that take guest posts on any topic. Add your Firecrawl key in Settings."],
     ["Edit / Look up", "Type the numbers in by hand from any SEO tool, or fetch them from Ahrefs (about 5 requests of your Ahrefs units per donor)."],
   ] },
   { id: "rechecks", title: "Rechecks and fix windows", items: [

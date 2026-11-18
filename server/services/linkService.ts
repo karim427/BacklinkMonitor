@@ -5,6 +5,7 @@ import { applyRecheck, evaluateRejectRules, fixWindowEnd, scheduleFirstCheck, ve
 import { verifyLink } from "./verifier.js";
 import { ensureFreshMetrics } from "./donorMetrics.js";
 import { pageIsUnrelated } from "./pageRelevance.js";
+import { donorFitFor } from "./donorCrawl.js";
 
 export async function getSettings(): Promise<AppSettings> {
   const row = (await db.select().from(s.settings).where(eq(s.settings.key, "app")))[0];
@@ -71,6 +72,7 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
     linkFound: v.linkFound, rel: v.rel, placement: v.placement, outboundLinks: v.outboundLinks, targetMatched: v.targetMatched,
     indexed: v.indexed, competitorLinked: v.competitorLinked, ...(await contextFacts(link, client)),
   };
+  facts.donorFit = await donorFitFor(donor.id, client.cluster);
   facts.canonicalElsewhere = v.canonicalElsewhere; facts.pageNofollow = v.pageNofollow; facts.sponsoredLabel = v.sponsoredLabel;
   if (v.linkFound && settings.aiPageRelevance) facts.pageUnrelated = await pageIsUnrelated(client, v.pageTitle, v.pageText);
   const rejects = v.linkFound ? evaluateRejectRules(facts) : [];

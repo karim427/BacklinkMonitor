@@ -43,6 +43,18 @@ function DonorDrawer({ id, onClose }: { id: number | null; onClose: () => void }
           <div className="grid grid-cols-3 gap-2 text-sm">{[["DR", d.donor.dr], ["US traffic", `${d.donor.usTrafficPct}%`], ["Organic", fmtNum(d.donor.organicTraffic)], ["Ref. domains", fmtNum(d.donor.referringDomains)], ["Linked", fmtNum(d.donor.linkedDomains)], ["Synced", fmtDate(d.donor.ahrefsSyncedAt)]].map(([k, v]) => <div key={k as string} className="rounded-lg border border-zinc-200 p-2"><Sub>{k}</Sub><div className="font-medium">{v}</div></div>)}</div>
           <div><h3 className="mb-2 text-sm font-semibold">Check A <Badge tone={d.checkA.passed ? "green" : "red"}>{d.checkA.passed ? "Pass" : "Fail"}</Badge></h3>
             {d.checkA.criteria.map((c: any) => <div key={c.key} className="flex justify-between border-t border-zinc-100 py-1.5 text-sm"><span>{c.label}</span><span className={c.pass ? "text-green-700" : "text-red-600"}>{c.pass ? "✓" : "✗"} {c.detail}</span></div>)}</div>
+          {d.crawl && (
+            <div><h3 className="mb-2 text-sm font-semibold">Blog check <span className="font-normal text-zinc-500">· {new Date(d.crawl.at).toLocaleDateString()}</span></h3>
+              {d.crawl.verdict ? (
+                <div className="space-y-2 text-sm">
+                  <p><b>{d.crawl.verdict.niche || "Unclear"}</b>{d.crawl.verdict.topics?.length ? ` · ${d.crawl.verdict.topics.join(", ")}` : ""}</p>
+                  {d.crawl.verdict.reason && <p className="text-zinc-600">{d.crawl.verdict.reason}</p>}
+                  <div>{Object.entries(d.crawl.verdict.scores as Record<string, number>).sort((a, b) => b[1] - a[1]).map(([c, n]) => <div key={c} className="flex justify-between border-t border-zinc-100 py-1.5"><span>{c}</span><span className={n >= 60 ? "text-green-700" : n >= 35 ? "text-amber-700" : "text-red-600"}>{n}/100</span></div>)}</div>
+                  <div className="flex flex-wrap gap-1">{d.crawl.verdict.spammy && <Badge tone="red">Looks spammy</Badge>}{d.crawl.verdict.thinOrAi && <Badge tone="amber">Thin or AI-like content</Badge>}{d.crawl.verdict.writeForUs && <Badge tone="amber">Takes guest posts on any topic</Badge>}</div>
+                </div>) : <p className="text-sm text-zinc-600">{d.crawl.note ?? "Pages were read, but there is no verdict."}</p>}
+              <p className="mt-2 text-xs text-zinc-500">Pages read:</p>
+              {d.crawl.pages.map((p: any) => <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="block truncate text-xs text-blue-600 hover:underline">{p.title || p.url}</a>)}
+            </div>)}
           <div><h3 className="mb-2 text-sm font-semibold">Links using this donor ({d.links.length})</h3>
             {d.links.map((l: any) => <div key={l.id} className="flex items-center justify-between border-t border-zinc-100 py-1.5 text-sm"><span>{l.client?.name}</span><VerdictBadge v={l.verdict} /></div>)}</div>
         </div>
@@ -56,9 +68,16 @@ export default function DonorsPage() {
   const { data, error, loading, reload } = useApi(`/donors${preview ? `?previewClient=${preview}` : ""}`);
   const { data: cl } = useApi("/clients");
   const [adding, setAdding] = useState(false); const [editD, setEditD] = useState<any | null>(null); const [lookingUp, setLookingUp] = useState<number | null>(null); const [view, setView] = useState<number | null>(null); const [delT, setDelT] = useState<any>(null);
+  const [crawling, setCrawling] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
   const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.domain} ${r.name}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.cluster || r.cluster === f.cluster) && (!f.local || r.isLocal));
   const pg = usePaged(rows, [f, preview]); const t = data?.totals;
+  async function crawl(id: number, domain: string) {
+    if (!window.confirm(`Read ${domain}'s blog with Firecrawl? It reads a few real posts (about 6 Firecrawl credits) and asks the AI what the site is about.`)) return;
+    setCrawling(id); setErr(null); setMsg(null);
+    try { const r = await post(`/donors/${id}/crawl`); setMsg(`${domain}: ${r.verdict ? `${r.verdict.niche || "read"} (${r.pages.length} pages read)` : r.note ?? "pages read"}.`); reload(); }
+    catch (e: any) { setErr(e.message); } finally { setCrawling(null); }
+  }
   async function lookup(id: number) { setLookingUp(id); setErr(null); setMsg(null); try { await post(`/donors/${id}/sync-ahrefs`); reload(); } catch (e: any) { setErr(e.message); } finally { setLookingUp(null); } }
   async function sync() {
     const missing = (data?.rows ?? []).filter((d: any) => !d.ahrefsSyncedAt && !d.dr && !d.organicTraffic).length;
@@ -80,13 +99,13 @@ export default function DonorsPage() {
         {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No donors" /> : (
           <Table><THead cols={["Donor", <>DR<InfoTip text="Domain Rating from Ahrefs (0 to 100). 20 or more is required." to="/guide#donors" /></>, <>US %<InfoTip text="Share of the site's visitors from the US. 60% or more is required." to="/guide#donors" /></>, <>Organic traffic<InfoTip text="Monthly visits from search. Minimum 1,000, or 300 for local sites." to="/guide#donors" /></>, "Local area", <>Clients<InfoTip text="How many different clients this site already links to. More than 3 is rejected." to="/guide#donors" /></>, "Last used", ""]} />
             <tbody>{pg.slice.map((r) => (
-              <tr key={r.id}><td><div className="font-medium">{r.domain}</div><Sub>{r.name} · {r.cluster}</Sub></td><td>{r.dr}</td>
+              <tr key={r.id}><td><div className="font-medium">{r.domain}</div><Sub>{r.name} · {r.cluster}</Sub>{r.crawl?.scores && (() => { const [c, n] = Object.entries(r.crawl.scores as Record<string, number>).sort((a, b) => b[1] - a[1])[0]; return <Sub>Blog: {r.crawl.niche || "read"} · best fit {c} ({n})</Sub>; })()}</td><td>{r.dr}</td>
                 <td className={r.usTrafficPct < 60 ? "text-red-600" : ""}>{r.usTrafficPct}%</td>
                 <td><div className={r.organicTraffic < r.minTraffic ? "text-red-600" : ""}>{fmtNum(r.organicTraffic)}</div><Sub>min {fmtNum(r.minTraffic)}{r.isLocal && " · local"}</Sub></td>
                 <td>{r.localArea ?? "—"}</td>
                 <td><Badge tone={r.reuseWarning ? "amber" : "neutral"}>{r.clientsLinked} / 3</Badge>{r.reuseForPreview && <Sub>reused &lt; 6 mo</Sub>}</td>
                 <td>{fmtDate(r.lastUsedAt)}</td>
-                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <AdminOnly><Button size="sm" variant="outline" onClick={() => setEditD(r)}>Edit</Button> <Button size="sm" variant="outline" disabled={lookingUp === r.id} onClick={() => lookup(r.id)} title="Fetch from Ahrefs (uses API units)">{lookingUp === r.id ? "…" : "Look up"}</Button> <Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></AdminOnly></td></tr>
+                <td className="whitespace-nowrap"><Button size="sm" variant="outline" onClick={() => setView(r.id)}>View</Button> <AdminOnly><Button size="sm" variant="outline" onClick={() => setEditD(r)}>Edit</Button> <Button size="sm" variant="outline" disabled={crawling === r.id} onClick={() => crawl(r.id, r.domain)} title="Read the blog with Firecrawl and check it fits the clients">{crawling === r.id ? "Reading…" : "Check blog"}</Button> <Button size="sm" variant="outline" disabled={lookingUp === r.id} onClick={() => lookup(r.id)} title="Fetch from Ahrefs (uses API units)">{lookingUp === r.id ? "…" : "Look up"}</Button> <Button size="sm" variant="ghost" onClick={() => setDelT(r)}>Delete</Button></AdminOnly></td></tr>
             ))}</tbody></Table>
         )}
         <Pager p={pg} />

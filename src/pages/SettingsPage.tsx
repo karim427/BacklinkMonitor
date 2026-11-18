@@ -5,6 +5,7 @@ import { Badge, Button, Card, ErrorBanner, Field, Input } from "@/components/ui/
 import { ClientDialog } from "@/features/clients/ClientDialog";
 import { DemoDataCard } from "@/features/settings/DemoDataCard";
 import { UsageMeter } from "@/features/ahrefs/UsageMeter";
+import { FirecrawlCard } from "@/features/settings/FirecrawlCard";
 import { ConfirmDialog, RowMenu } from "@/components/ui/overlays";
 import { del, post, put, useApi } from "@/lib/api";
 import { fmtDate } from "@/lib/utils";
@@ -103,6 +104,7 @@ export default function SettingsPage() {
           <Button className="mt-4" onClick={() => save({ verifierUserAgent: s.verifierUserAgent, firstRecheckDays: s.firstRecheckDays, nextRecheckDays: s.nextRecheckDays, fixWindowDays: s.fixWindowDays, defaultMonthlyTarget: s.defaultMonthlyTarget }, "Verification defaults")}>Save</Button></Card>
       </div>
 
+      <FirecrawlCard />
       <AdminOnly><DemoDataCard onDone={() => { reload(); reloadClients(); }} /></AdminOnly>
       <Card className="mb-6 p-5"><h2 className="mb-1 text-sm font-semibold">Anchor mix targets</h2><p className="mb-3 text-xs text-zinc-500">Rolling 3 months per target URL. Checklist: Branded 40–50%, Partial 20–30%, Natural 15–25%, Exact 0–10%.</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Object.keys(DEFAULT_ANCHOR_BANDS).map((k) => (

@@ -7,6 +7,7 @@ import { checkA, evaluateRejectRules } from "../services/rules.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { getAhrefsKey } from "../services/secrets.js";
 import { syncDonor, syncMany } from "../services/donorMetrics.js";
+import { crawlDonor, getAllCrawls, getDonorCrawl } from "../services/donorCrawl.js";
 import { toDonorMetrics, hostOf } from "../services/linkService.js";
 import { aiConfigured, aiStatus, chat, extractJson } from "../services/ai.js";
 import { HttpError, createLink, linkBody, loadLinks, wrap } from "./core.js";
@@ -27,12 +28,12 @@ const SIX_MO = 183 * 86_400_000;
 extra.get("/donors", wrap(async (req) => {
   const previewClient = req.query.previewClient ? Number(req.query.previewClient) : null;
   const donors = (await db.select().from(s.donors).orderBy(desc(s.donors.dr)));
-  const links = await loadLinks();
+  const [links, crawls] = await Promise.all([loadLinks(), getAllCrawls()]);
   const rows = donors.map((d) => {
     const used = links.filter((l) => l.donorId === d.id);
     const clientIds = new Set(used.map((l) => l.clientId));
     const reuse = previewClient ? used.some((l) => l.clientId === previewClient && l.verdict !== "Not relevant" && (l.placedAt ?? l.createdAt).getTime() >= Date.now() - SIX_MO) : false;
-    return { ...d, clientsLinked: clientIds.size, linkCount: used.length, reuseWarning: clientIds.size > 3 || reuse, reuseForPreview: reuse, minTraffic: d.isLocal ? 300 : 1000 };
+    return { ...d, clientsLinked: clientIds.size, linkCount: used.length, reuseWarning: clientIds.size > 3 || reuse, reuseForPreview: reuse, minTraffic: d.isLocal ? 300 : 1000, crawl: crawls[String(d.id)] ? { at: crawls[String(d.id)].at, niche: crawls[String(d.id)].verdict?.niche ?? null, scores: crawls[String(d.id)].verdict?.scores ?? null } : null };
   });
   return {
     rows,
@@ -44,7 +45,11 @@ extra.get("/donors/:id", wrap(async (req) => {
   const d = (await db.select().from(s.donors).where(eq(s.donors.id, id)))[0];
   if (!d) throw new HttpError(404, "Donor not found");
   const clusterFor = (req.query.cluster as Cluster) ?? (d.cluster as Cluster);
-  return { donor: d, checkA: checkA(toDonorMetrics(d), clusterFor), links: (await loadLinks()).filter((l) => l.donorId === id) };
+  return { donor: d, checkA: checkA(toDonorMetrics(d), clusterFor), links: (await loadLinks()).filter((l) => l.donorId === id), crawl: await getDonorCrawl(id) };
+}));
+/** Reads the donor's blog with Firecrawl and judges what it is about (about 6 Firecrawl credits). */
+extra.post("/donors/:id/crawl", wrap(async (req) => {
+  try { return await crawlDonor(idOf(req.params.id)); } catch (e) { throw new HttpError(400, (e as Error).message); }
 }));
 extra.post("/donors", wrap(async (req, res) => { res.status(201); return (await db.insert(s.donors).values(donorBody.parse(req.body)).returning())[0]; }));
 extra.put("/donors/:id", wrap(async (req) => (await db.update(s.donors).set(given(donorBody.partial().parse(req.body), req.body)).where(eq(s.donors.id, idOf(req.params.id))).returning())[0]));

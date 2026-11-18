@@ -77,6 +77,8 @@ export interface LinkFacts {
   linkFound?: boolean; rel?: string[]; placement?: string; outboundLinks?: number; targetMatched?: boolean;
   indexed?: boolean; competitorLinked?: boolean; temporary?: boolean;
   canonicalElsewhere?: boolean; pageNofollow?: boolean; sponsoredLabel?: boolean; pageUnrelated?: boolean;
+  /** How well the donor's whole blog fits the client's cluster (0-100), from reading it with Firecrawl. Overrides the cluster/niche guess when present. */
+  donorFit?: number | null;
   // contextual
   donor: DonorMetrics; clientCluster: Cluster; sourceUrl: string;
   clientId?: number;
@@ -104,7 +106,7 @@ export function evaluateRejectRules(f: LinkFacts): string[] {
   add(BANNED_VERTICALS.some((v) => text.includes(v)), "niche_vertical");
   const clusterFit = d.cluster === f.clientCluster ||
     (!!d.niche && CLUSTER_NICHES[f.clientCluster].some((n) => d.niche!.toLowerCase().includes(n.toLowerCase())));
-  add(!clusterFit, "niche_cluster_mismatch");
+  add(f.donorFit != null ? f.donorFit < 35 : !clusterFit, "niche_cluster_mismatch");
   add(d.flags?.writeForUs, "niche_write_for_us");
 
   add(!d.metricsMissing && d.dr >= 40 && d.organicTraffic < 500, "quality_dr_traffic");

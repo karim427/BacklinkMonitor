@@ -9,7 +9,8 @@ import { anchorMix, dueLabel, monthKey, stage1, targetProgress, validateBands, l
 import { getSettings, hostOf, runDueRechecks, runVerification, scheduleOnPlace } from "../services/linkService.js";
 import { aiStatus } from "../services/ai.js";
 import { given } from "../util.js";
-import { ahrefsStatus, checkAhrefsKey, getAhrefsKey, setAhrefsKey } from "../services/secrets.js";
+import { ahrefsStatus, checkAhrefsKey, firecrawlStatus, getAhrefsKey, getFirecrawlKey, setAhrefsKey, setFirecrawlKey } from "../services/secrets.js";
+import { creditUsage } from "../services/firecrawlApi.js";
 import { fetchDonorMetrics } from "../services/ahrefs.js";
 import { autoLookupEnabled } from "../services/donorMetrics.js";
 import { listLost, refreshLost } from "../services/ahrefsLost.js";
@@ -331,6 +332,18 @@ core.get("/lost-links", wrap(async (req) => {
 core.post("/lost-links/refresh", wrap(async (req) => {
   const b = z.object({ clientId: z.number().int().optional(), days: z.number().int().min(1).max(365).optional() }).parse(req.body ?? {});
   try { return await refreshLost(b); } catch (e) { throw new HttpError(400, (e as Error).message); }
+}));
+/** Firecrawl key: write-only, checked with Firecrawl before it is stored. */
+core.put("/settings/firecrawl-key", wrap(async (req) => {
+  const { key } = z.object({ key: z.string().trim().min(8).max(500).nullable() }).parse(req.body);
+  if (key === null) { await setFirecrawlKey(null); return { ok: true, removed: true }; }
+  try { const u = await creditUsage(key); await setFirecrawlKey(key); return { ok: true, verified: true, remaining: u.remaining }; }
+  catch (e) { if (/rejected/i.test((e as Error).message)) throw new HttpError(400, "Firecrawl rejected this key. Check that you copied all of it."); await setFirecrawlKey(key); return { ok: true, verified: false }; }
+}));
+core.get("/firecrawl/usage", wrap(async () => {
+  const st = await firecrawlStatus(); if (!st.connected) return { hasKey: false };
+  const key = await getFirecrawlKey();
+  try { return { hasKey: true, last4: st.last4, source: st.source, ...(await creditUsage(key!)) }; } catch (e) { return { hasKey: true, last4: st.last4, source: st.source, error: (e as Error).message }; }
 }));
 /** Ahrefs units left. Free to ask (it does not spend units). */
 let usageCache: { at: number; data: any } | null = null;
