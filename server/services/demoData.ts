@@ -9,7 +9,7 @@ const demoUrl = (u: string) => isDemoHost(hostOf(u));
 /** What "remove demo data" would delete, so an admin can review it first. */
 export async function previewDemoData() {
   const [links, donors, clients, prospects, haro, citations] = await Promise.all([
-    db.select().from(s.links), db.select().from(s.donors), db.select().from(s.clients), db.select().from(s.prospects), db.select().from(s.haroRequests), db.select({ id: s.citations.id }).from(s.citations),
+    db.select().from(s.links), db.select().from(s.donors), db.select().from(s.clients), db.select({ id: s.prospects.id, domain: s.prospects.domain }).from(s.prospects), db.select({ id: s.haroRequests.id, outlet: s.haroRequests.outlet, journalist: s.haroRequests.journalist }).from(s.haroRequests), db.select({ id: s.citations.id }).from(s.citations),
   ]);
   const demoLinks = links.filter((l) => demoUrl(l.sourceUrl));
   const realLinkClients = new Set(links.filter((l) => !demoUrl(l.sourceUrl)).map((l) => l.clientId));
