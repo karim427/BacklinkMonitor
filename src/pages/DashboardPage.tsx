@@ -51,7 +51,7 @@ export default function DashboardPage() {
             <Progress value={pct} className="mt-4" />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
               <span>{p?.relevant} / {d?.target} relevant · {pct}% · <Link to={`/clients?month=${month}`} className="underline decoration-dotted hover:text-zinc-800">{d?.clientsAtTarget} of {d?.clientCount} clients at target</Link></span>
-              <span className="flex gap-1.5"><Badge>{d?.chips.unverified} Unverified</Badge><Badge tone="amber">{d?.chips.awaitingIndex} Awaiting index</Badge><Badge tone="amber">{d?.chips.partlyFixing} Partly fixing</Badge>{!!d?.chips.needsDonorNumbers && <Badge>{d.chips.needsDonorNumbers} Need donor numbers</Badge>}</span>
+              <span className="flex gap-1.5"><Badge>{d?.chips.unverified} Unverified</Badge><Badge tone="amber">{d?.chips.awaitingIndex} Awaiting index</Badge><Badge tone="amber">{d?.chips.partlyFixing} Partly fixing</Badge></span>
             </div>
           </>
         )}

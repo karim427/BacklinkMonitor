@@ -95,7 +95,6 @@ core.get("/dashboard", wrap(async (req) => {
       unverified: inMonth.filter((l) => l.verificationStatus === "Unverified").length,
       awaitingIndex: inMonth.filter((l) => l.rejectReasons?.includes("quality_not_indexed")).length,
       partlyFixing: inMonth.filter((l) => l.verdict === "Partly relevant" && l.fixWindowEndsAt).length,
-      needsDonorNumbers: prog.needsDonorNumbers,
     },
     added: inMonth.length, rejected: inMonth.filter((l) => l.verdict === "Not relevant").length,
     overdue: { count: dueList.length, next30 },

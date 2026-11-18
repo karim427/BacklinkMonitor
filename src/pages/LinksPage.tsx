@@ -5,19 +5,20 @@ import { Button, EmptyState, ErrorBanner, Input, Select } from "@/components/ui/
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
 import { authHeaders, del, post, useApi } from "@/lib/api";
 import { cn, fmtDate, monthLabel, ruleLabel } from "@/lib/utils";
-import { PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, ActionBadge, Sub, Table, TableSkeleton, THead, VerdictBadge, VerifBadge, DueText, ext } from "@/features/shared/common";
+import { PageHeader, Panel, FilterBar, Kpi, KpiRow, RefreshButton, Sub, Table, TableSkeleton, THead, DueText, ext } from "@/features/shared/common";
 import { LinkDialog } from "@/features/links/LinkDialog";
 import { ExportDialog } from "@/features/links/ExportDialog";
 import { PageCheckDialog } from "@/features/links/PageCheckDialog";
 import { ahrefsReadyOn } from "@server/services/sourceCheck";
 import { StatusSelect } from "@/features/links/StatusSelect";
-import { PRE_LIVE, VERDICTS, VERIFICATION_STATUSES } from "@server/services/constants";
+import { PRE_LIVE } from "@server/services/constants";
 import { InfoTip } from "@/components/InfoTip";
+import { CheckCell } from "@/features/links/CheckCell";
 
 export default function LinksPage() {
   const { data, error, loading, reload } = useApi("/links");
   const [sp, setSp] = useSearchParams();
-  const blank = { q: "", client: "", verdict: "", ver: "", donor: "", month: "", due: false };
+  const blank = { q: "", client: "", verdict: "", month: "", due: false };
   const [f, setF] = useState({ ...blank, client: sp.get("client") ?? "", month: sp.get("month") ?? "" });
   // Months are dropdowns: the newest (or the one picked in the Month filter) starts open.
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
@@ -31,12 +32,11 @@ export default function LinksPage() {
 
   const rows: any[] = data?.rows ?? [];
   const clients = useMemo(() => [...new Map(rows.map((l) => [l.clientId, l.client?.name])).entries()].map(([value, label]) => ({ value, label })), [rows]);
-  const donors = useMemo(() => [...new Map(rows.map((l) => [l.donorId, `${l.donor?.domain} (DR ${l.donor?.dr})`])).entries()].map(([value, label]) => ({ value, label })), [rows]);
   const filtered = rows.filter((l) => {
     const q = f.q.toLowerCase();
     return (!q || [l.sourceUrl, l.targetUrl, l.anchorText, l.client?.name, l.donor?.domain].join(" ").toLowerCase().includes(q)) &&
       (!f.client || String(l.clientId) === f.client) && (!f.month || l.month === f.month) && (!f.verdict || l.verdict === f.verdict) &&
-      (!f.ver || l.verificationStatus === f.ver) && (!f.donor || String(l.donorId) === f.donor) && (!f.due || (l.nextCheckAt && new Date(l.nextCheckAt) <= new Date() && l.stage !== "Lost"));
+      (!f.due || (l.nextCheckAt && new Date(l.nextCheckAt) <= new Date() && l.stage !== "Lost"));
   });
   const months = useMemo(() => [...new Set<string>(rows.map((l) => l.month))].sort().reverse(), [rows]);
   const groups = [...new Set<string>(filtered.map((l) => l.month))].sort().reverse();
@@ -59,12 +59,11 @@ export default function LinksPage() {
         <RefreshButton onClick={reload} loading={loading} />
       </>} />
       {(error || rowErr) && <div className="mb-4"><ErrorBanner message={(error || rowErr)!} onRetry={reload} /></div>}
-      <KpiRow cols={6}>
+      <KpiRow cols={5}>
         <Kpi label="Total" value={t?.total} loading={loading} tone="blue" onClick={() => setF({ ...f, verdict: "", due: false })} active={!f.verdict && !f.due} />
         <Kpi label="Relevant" value={t?.relevant} loading={loading} tone="blue" onClick={() => setF({ ...f, verdict: "Relevant", due: false })} active={f.verdict === "Relevant"} />
         <Kpi label="Partly relevant" value={t?.partly} loading={loading} tone="amber" sub="14-day fix window" onClick={() => setF({ ...f, verdict: "Partly relevant", due: false })} active={f.verdict === "Partly relevant"} />
         <Kpi label="Not relevant" value={t?.notRelevant} loading={loading} tone="red" sub="Replace or drop" onClick={() => setF({ ...f, verdict: "Not relevant", due: false })} active={f.verdict === "Not relevant"} />
-        <Kpi label="Not judged" value={t?.notJudged} loading={loading} tone="blue" sub="Not live yet, or no donor numbers" onClick={() => setF({ ...f, verdict: "Not judged", due: false })} active={f.verdict === "Not judged"} />
         <Kpi label="Due rechecks" value={t?.dueRechecks} loading={loading} tone="red" onClick={() => setF({ ...f, verdict: "", due: true })} active={f.due} />
       </KpiRow>
       <Panel>
@@ -72,9 +71,7 @@ export default function LinksPage() {
           <Input className="w-56" placeholder="Search links…" value={f.q} onChange={(e) => set("q", e.target.value)} />
           <Select className="w-40" value={f.client} onChange={(v) => set("client", v)} placeholder="All clients" options={clients} />
           <Select className="w-44" value={f.month} onChange={(v) => set("month", v)} placeholder="All months" options={months.map((m) => ({ value: m, label: monthLabel(m) }))} />
-          <Select className="w-40" value={f.verdict} onChange={(v) => set("verdict", v)} placeholder="All verdicts" options={VERDICTS.map((v) => ({ value: v, label: v }))} />
-          <Select className="w-40" value={f.ver} onChange={(v) => set("ver", v)} placeholder="All verification" options={VERIFICATION_STATUSES.map((v) => ({ value: v, label: v }))} />
-          <Select className="w-52" value={f.donor} onChange={(v) => set("donor", v)} placeholder="All donors" options={donors} />
+          <Select className="w-40" value={f.verdict} onChange={(v) => set("verdict", v)} placeholder="All results" options={["Relevant", "Partly relevant", "Not relevant"].map((v) => ({ value: v, label: v }))} />
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.due} onChange={(e) => set("due", e.target.checked)} />Due only</label>
         </FilterBar>
         {loading && !data ? <TableSkeleton /> : !filtered.length ? <EmptyState title="No links match" hint={rows.length ? "Try clearing the filters." : "Add your first backlink to start verifying."} /> : (
@@ -89,24 +86,18 @@ export default function LinksPage() {
                 {isOpen(g) && (
                   <Table>
                     <THead cols={["Client", "Target page", "Donor", "Anchor",
-                      <>Verdict<InfoTip text="Is the link any good? Relevant counts toward the target. Judged only once the link is live." to="/guide#verdict" /></>,
                       <>Status<InfoTip text="Where the link is: Pending, In process, Live, Replace, Lost or Rejected. Click it to change." to="/guide#status" /></>,
-                      <>Check<InfoTip text="Verified only means the page was opened and read. It does not mean your link was found." to="/guide#checks" /></>,
+                      <>Check<InfoTip text="The result of checking the page: Relevant, Partly relevant or Not relevant, with the main reason." to="/guide#checks" /></>,
                       ""]} />
                     <tbody>
               {ls.map((l) => (
                 <tr key={l.id} className="align-top">
                   <td><div className="font-medium">{l.client?.name}</div><Sub>{l.client?.cluster}</Sub></td>
                   <td className="max-w-44"><div className="truncate">{l.targetPage?.keyword ?? "—"}</div><Sub><span className="block truncate">{l.targetUrl}</span></Sub></td>
-                  <td><div>{l.donor?.domain}</div><Sub>{l.donor && !l.donor.ahrefsSyncedAt && !l.donor.dr && !l.donor.organicTraffic ? "Traffic not checked yet" : `DR ${l.donor?.dr} · ${l.donor?.usTrafficPct}% US · ${(l.donor?.organicTraffic ?? 0).toLocaleString("en-US")} visits · ${l.donor?.referringDomains} RDs`}</Sub></td>
+                  <td><div>{l.donor?.domain}</div>{l.donor && (l.donor.dr > 0 || l.donor.organicTraffic > 0) && <Sub>DR {l.donor.dr} · {(l.donor.organicTraffic ?? 0).toLocaleString("en-US")} visits</Sub>}</td>
                   <td><div>{l.anchorText || "—"}</div><Sub>{l.anchorType}</Sub></td>
-                  <td>{l.action === "REJECTED" ? <><VerdictBadge v="Not relevant" /><Sub>Rejected by hand</Sub></>
-                    : PRE_LIVE.includes(l.action) ? <><span className="text-zinc-400">—</span><Sub>Judged once live</Sub></>
-                    : l.verdict === "Not judged" ? <span className="inline-flex items-center"><span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">Needs donor numbers</span><InfoTip text="This site has no DR or traffic numbers yet. Add them on the Donors page (Edit) or use Look up, then click Verify now." to="/guide#verdict" /></span>
-                    : <VerdictBadge v={l.verdict} />}
-                    {l.verdict !== "Not judged" && !PRE_LIVE.includes(l.action) && !!l.rejectReasons?.length && (() => { const rs = [...l.rejectReasons].sort((a: string, b: string) => Number(a === "donor_metrics_missing") - Number(b === "donor_metrics_missing")); return <div title={rs.map(ruleLabel).join("\n")} className="mt-1 max-w-[14rem] space-y-0.5">{rs.slice(0, 2).map((c: string) => <Sub key={c}><span className="line-clamp-2">{ruleLabel(c)}</span></Sub>)}{rs.length > 2 && <Sub>+{rs.length - 2} more</Sub>}</div>; })()}{l.sourceCheck?.scored && <button type="button" onClick={() => setPageCheck(l)} className="mt-1 block text-left text-xs text-blue-600 hover:underline">Page fit {l.sourceCheck.fit} · link context {l.sourceCheck.context ? l.sourceCheck.contextFit : "—"}</button>}</td>
                   <td><div className="flex flex-col items-start gap-1"><StatusSelect link={l} onChanged={reload} />{l.stage === "Confirmed" && <span title="Passed the 30-day recheck" className="rounded-md border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">✓ Confirmed</span>}</div></td>
-                  <td><VerifBadge v={l.verificationStatus} />{PRE_LIVE.includes(l.action) && l.lastCheckedAt && <div className="mt-1 max-w-[10rem] text-xs text-zinc-500">Not on the page yet</div>}{!PRE_LIVE.includes(l.action) && (() => { const d = ahrefsReadyOn(l.sourceCheck?.publishedAt, l.placedAt); return d && d > new Date() ? <div title="Ahrefs needs about a month to crawl a new page or link. Our own check works now; Ahrefs-based reports (lost links) will include it after this date." className="mt-1 max-w-[10rem] text-xs text-amber-700">Ahrefs: not before {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div> : null; })()}{l.lastError && <div className="mt-1 max-w-[14rem] text-xs text-red-700" title="We couldn't read the page, so the verdict was left unchanged.">{l.lastError}</div>}<div><DueText due={l.due} /> {l.nextCheckKind && <Sub>{l.nextCheckKind}</Sub>}</div>{l.lastCheckedAt && <div className="mt-1 text-xs text-zinc-400">Checked {fmtDate(l.lastCheckedAt)}</div>}</td>
+                  <td className="max-w-[13rem]"><CheckCell l={l} onDetails={() => setPageCheck(l)} /></td>
                   <td><div className="flex items-center gap-1">
                     <Button size="sm" variant="outline" disabled={busyId === l.id} onClick={() => verify(l.id)}>{busyId === l.id ? "Checking…" : "Verify now"}</Button>
                     <RowMenu items={[{ label: "Edit link", onSelect: () => setEdit(l) }, { label: "Page check", onSelect: () => setPageCheck(l) }, { label: "Open source", onSelect: () => window.open(l.sourceUrl, "_blank") }, { label: "Delete", danger: true, onSelect: () => setDel(l) }]} />

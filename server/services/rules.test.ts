@@ -10,25 +10,16 @@ const base = (o: Partial<LinkFacts> = {}, d: Partial<DonorMetrics> = {}): LinkFa
   donor: { ...donor, ...d }, clientCluster: "Tech / SaaS", sourceUrl: "https://goodblog.com/post", linkFound: true, targetMatched: true, indexed: true, rel: [], placement: "Body", outboundLinks: 10, ...o,
 });
 
-describe("donor with no metrics loaded", () => {
+describe("donor with no numbers", () => {
   const zero = { ...donor, dr: 0, usTrafficPct: 0, organicTraffic: 0, referringDomains: 0, linkedDomains: 0, metricsMissing: true };
-  it("is flagged as a data gap, not rejected for 0% US traffic", () => {
+  it("is not rejected for 0% US traffic and doesn't block the verdict", () => {
     const r = evaluateRejectRules({ ...base(), donor: zero });
-    expect(r).toEqual(["donor_metrics_missing"]);
-    expect(verdictFor(r).verdict).toBe("Not judged");
+    expect(r).toEqual([]); expect(verdictFor(r).verdict).toBe("Relevant");
   });
-  it("still fails on real low US traffic once metrics exist", () => {
+  it("still fails on real low US traffic once numbers exist", () => {
     expect(evaluateRejectRules({ ...base(), donor: { ...zero, metricsMissing: false, organicTraffic: 5000, dr: 30, usTrafficPct: 20 } })).toContain("domain_low_us_traffic");
   });
-});
-
-describe("verdict when the donor has no numbers", () => {
-  it("is Not judged, not Partly relevant or Not relevant", () => expect(verdictFor(["donor_metrics_missing"]).verdict).toBe("Not judged"));
-  it("a hard reject that doesn't need metrics still wins", () => expect(verdictFor(["domain_spam_tld", "donor_metrics_missing"]).verdict).toBe("Not relevant"));
-  it("counts as pending toward the target, not as received-relevant", () => {
-    const p = targetProgress([{ verdict: "Not judged", action: "LIVE", createdAt: new Date("2026-11-05") }, { verdict: "Relevant", action: "LIVE", createdAt: new Date("2026-11-06") }], "2026-11", 4);
-    expect(p).toMatchObject({ relevant: 1, pending: 0, live: 2, needsDonorNumbers: 1, remaining: 3 });
-  });
+  it("a rule that needs no numbers still rejects", () => expect(evaluateRejectRules({ ...base(), sourceUrl: "https://x.xyz/p", donor: zero })).toContain("domain_spam_tld"));
 });
 
 describe("reject list", () => {
@@ -85,7 +76,7 @@ describe("target counting", () => {
   });
   it("pending = Pending only, inProcess = In process, live = Live; none of them is 'judged but fixable'", () => {
     const p = targetProgress([mk("Not judged", "2026-11-02", "PENDING"), mk("Not judged", "2026-11-03", "IN_PROCESS"), mk("Partly relevant", "2026-11-04", "REPLACE"), mk("Not judged", "2026-11-05", "LIVE")], "2026-11", 5);
-    expect(p).toMatchObject({ pending: 1, inProcess: 1, live: 1, fixing: 1, needsDonorNumbers: 1, relevant: 0, remaining: 5 });
+    expect(p).toMatchObject({ pending: 1, inProcess: 1, live: 1, fixing: 1, relevant: 0, remaining: 5 });
   });
   it("remaining never negative", () => expect(targetProgress([mk("Relevant", "2026-11-01")], "2026-11", 0).remaining).toBe(0));
 });

@@ -23,9 +23,8 @@ export function targetProgress(links: CountableLink[], month: string, target: nu
   const inProcess = inMonth.filter((l) => l.action === "IN_PROCESS").length; // placed, waiting to appear
   const live = inMonth.filter((l) => l.action === "LIVE").length;            // on the page ("relevant" is the subset that passed every check)
   const fixing = inMonth.filter((l) => !notLiveYet(l) && l.verdict === "Partly relevant").length;
-  const needsDonorNumbers = inMonth.filter((l) => !notLiveYet(l) && l.verdict === "Not judged").length;
   const rejected = inMonth.filter((l) => l.verdict === "Not relevant").length;
-  return { received: inMonth.length, relevant, pending, inProcess, live, fixing, needsDonorNumbers, rejected, remaining: Math.max(0, target - relevant), target };
+  return { received: inMonth.length, relevant, pending, inProcess, live, fixing, rejected, remaining: Math.max(0, target - relevant), target };
 }
 
 /* ---------- Stage 1: target page approval ---------- */
@@ -100,7 +99,6 @@ export function evaluateRejectRules(f: LinkFacts): string[] {
 
   add(SPAM_TLDS.some((t) => host.endsWith(t)), "domain_spam_tld");
   add(NON_US_TLDS.some((t) => host.endsWith(t)), "domain_non_us");
-  add(d.metricsMissing, "donor_metrics_missing");
   add(!d.metricsMissing && d.usTrafficPct < 60, "domain_low_us_traffic");
   add(d.flags?.nonEnglish, "domain_non_english");
   add(d.flags?.disavowed, "domain_disavowed");
@@ -146,8 +144,6 @@ export function verdictFor(rejects: string[], opts: { fixWindowEndsAt?: Date | n
   const fixable = rejects.filter((c) => RULE_BY_CODE[c]?.fixable);
   const hard = rejects.filter((c) => !RULE_BY_CODE[c]?.fixable);
   if (hard.length) return { verdict: "Not relevant", fixable, hard };
-  // Without the donor's DR/traffic we can't decide, so don't accept or reject: wait for the numbers.
-  if (rejects.includes("donor_metrics_missing")) return { verdict: "Not judged", fixable, hard };
   if (fixable.length) {
     const now = opts.now ?? new Date();
     if (opts.fixWindowEndsAt && opts.fixWindowEndsAt.getTime() < now.getTime()) return { verdict: "Not relevant", fixable, hard };

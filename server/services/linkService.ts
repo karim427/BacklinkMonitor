@@ -114,7 +114,7 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
   } else {
     const r = verdictFor(rejects);
     const existingWindow = link.fixWindowEndsAt && link.fixWindowEndsAt > now ? link.fixWindowEndsAt : fixWindowEnd(now, settings);
-    const verdict = !v.linkFound ? (facts.donor.metricsMissing ? "Not judged" : "Partly relevant") : verdictFor(rejects, { fixWindowEndsAt: link.fixWindowEndsAt }).verdict;
+    const verdict = !v.linkFound ? "Partly relevant" : verdictFor(rejects, { fixWindowEndsAt: link.fixWindowEndsAt }).verdict;
     Object.assign(patch, {
       verdict, action: verdict === "Relevant" || verdict === "Not judged" ? "LIVE" : "REPLACE",
       fixWindowEndsAt: verdict === "Partly relevant" ? existingWindow : null,
@@ -122,7 +122,7 @@ export async function runVerification(linkId: number, fetchImpl?: typeof fetch) 
     });
     if (preLive) Object.assign(patch, { placedAt: link.placedAt ?? now, stage: "Placed", ...scheduleFirstCheck(link.placedAt ?? now, settings) }); // went live: the 30-day clock starts
     if (!link.nextCheckAt && !patch.nextCheckAt) Object.assign(patch, scheduleFirstCheck(link.placedAt ?? now, settings)); // e.g. set Live by hand: make sure it still gets rechecked
-    if (!v.linkFound) patch.rejectReasons = facts.donor.metricsMissing ? ["link_wrong_target", "donor_metrics_missing"] : ["link_wrong_target"];
+    if (!v.linkFound) patch.rejectReasons = ["link_wrong_target"];
     void r;
   }
   (await db.insert(s.checkRuns).values({

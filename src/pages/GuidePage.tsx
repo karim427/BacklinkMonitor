@@ -17,12 +17,14 @@ const SECTIONS: Section[] = [
     ["Rejected", "You marked it as turned down or dropped. It is never checked again."],
     ["✓ Confirmed (green tag)", "Shown under Status once a link has passed its first 30-day recheck."],
   ] },
-  { id: "verdict", title: "Verdict: is the link any good?", items: [
+  { id: "verdict", title: "Check: the result for each link", intro: "The Check column gives one simple answer per link. Click Verify now to run it again.", items: [
     ["Relevant", "Passed every check. Only these count toward the monthly target."],
-    ["Partly relevant", "Has a fixable problem (for example nofollow). You have a 14-day fix window before it becomes Not relevant."],
-    ["Not relevant", "Failed a rule that can't be fixed, or the fix window ran out. Replace or drop it."],
-    ["Needs donor numbers", "The link is live, but the site it is on has no DR or traffic numbers, so it can't be decided yet. Add them on the Donors page (Edit) or use Look up, then click Verify now."],
-    ["Not live yet (—)", "A Pending or In process link. It is judged once it is live."],
+    ["Partly relevant", "Has a fixable problem (for example nofollow), shown under the result. You have a 14-day fix window before it becomes Not relevant."],
+    ["Not relevant", "Failed a rule that can't be fixed, or the fix window ran out. The main reason is shown under it. Replace or drop the link."],
+    ["Not live yet", "A Pending or In process link. It is checked once it is live."],
+    ["Not checked yet", "The link is live but hasn't been checked. Click Verify now."],
+    ["Couldn't check", "The page couldn't be opened (site down, blocked, timed out). The reason is shown. The old result is kept."],
+    ["Donor numbers", "A site's DR and traffic are filled in automatically when you have them. If you don't, the link is simply judged on everything else: missing numbers never block a result."],
   ] },
   { id: "checks", title: "What Verify now actually does", intro: "The app opens the page like a visitor (using the name in Settings > Verifier user agent) and reads it. It never logs in or changes anything.", items: [
     ["Finds your link", "Looks for a link to the client's site and checks it goes to the exact Target URL."],
@@ -32,7 +34,6 @@ const SECTIONS: Section[] = [
     ["Page check (each link's own page)", "With a Firecrawl key, every check also reads the exact page the link is on (not just the site). It sees links built by JavaScript or hidden from a plain fetch, then the AI scores how well the page fits the client, how naturally the link reads in its sentence, and the content quality. Open it from the row's ... menu > Page check. A page under 35 is rejected as an unrelated niche."],
     ["Too new for Ahrefs", "Ahrefs needs about a month to crawl a new page or a newly added link. Our own check (reading the page directly) works the moment you click Verify now, but Ahrefs-based things, such as the Lost links list, can't include a link until it has crawled it. The date shown is the later of when the page was published and when the link went live, plus about 30 days."],
     ["Donor rules", "US traffic, DR, traffic minimum, linked-to-referring domains, reuse limits. These use the donor's numbers."],
-    ["Check badge", "Verified only means the page was opened and read. It does not mean the link was found. The Verdict says that."],
     ["Error", "The page couldn't be opened (site down, blocked, timed out). The old verdict is kept and the reason is shown."],
   ] },
   { id: "dashboard", title: "Dashboard numbers", items: [
