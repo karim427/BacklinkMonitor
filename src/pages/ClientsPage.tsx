@@ -6,13 +6,14 @@ import { useApi } from "@/lib/api";
 import { currentMonth } from "@/lib/utils";
 import { FilterBar, Kpi, KpiRow, MonthPicker, PageHeader, Panel, RefreshButton, Sub, Table, TableSkeleton, THead } from "@/features/shared/common";
 import { ClientDialog } from "@/features/clients/ClientDialog";
+import { SitemapDialog } from "@/features/clients/SitemapDialog";
 
 export default function ClientsPage() {
   const [sp, setSp] = useSearchParams();
   const month = /^\d{4}-\d{2}$/.test(sp.get("month") ?? "") ? sp.get("month")! : currentMonth();
   const setMonth = (m: string) => { sp.set("month", m); setSp(sp, { replace: true }); };
   const { data, error, loading, reload } = useApi(`/clients?month=${month}`);
-  const [q, setQ] = useState(""); const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState(""); const [adding, setAdding] = useState(false); const [scanFor, setScanFor] = useState<number | null>(null);
   const nav = useNavigate();
   const rows = (data?.rows ?? []).filter((r: any) => `${r.name} ${r.domain} ${r.cluster}`.toLowerCase().includes(q.toLowerCase()))
   const t = data?.totals;
@@ -48,7 +49,8 @@ export default function ClientsPage() {
           </Table>
         )}
       </Panel>
-      <ClientDialog open={adding} onOpenChange={setAdding} onSaved={reload} />
+      <ClientDialog open={adding} onOpenChange={setAdding} onSaved={(c) => { reload(); if (c?.id) setScanFor(c.id); }} />
+      <SitemapDialog open={scanFor !== null} onOpenChange={(o) => !o && setScanFor(null)} clientId={scanFor} onAdded={reload} />
     </>
   );
 }

@@ -6,14 +6,14 @@ import { CLUSTERS } from "@server/services/constants";
 
 const empty = { name: "", domain: "", cluster: CLUSTERS[0] as string, city: "", state: "", isCashBuyer: false, defaultMonthlyTarget: 4 };
 
-export function ClientDialog({ open, onOpenChange, client, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; client?: any; onSaved: () => void }) {
+export function ClientDialog({ open, onOpenChange, client, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; client?: any; onSaved: (saved?: any) => void }) {
   const [f, setF] = useState<any>(empty); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
   useEffect(() => { if (open) { setErr(null); setF(client ? { ...empty, ...Object.fromEntries(Object.entries(client).map(([k, v]) => [k, v ?? ""])) } : empty); } }, [open, client]);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
     const body = { name: f.name, domain: f.domain, cluster: f.cluster, city: f.city || null, state: f.state || null, isCashBuyer: !!f.isCashBuyer, defaultMonthlyTarget: Number(f.defaultMonthlyTarget) };
-    try { client ? await put(`/clients/${client.id}`, body) : await post("/clients", body); onSaved(); onOpenChange(false); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    try { const saved = client ? await put(`/clients/${client.id}`, body) : await post("/clients", body); onSaved(client ? undefined : saved); onOpenChange(false); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange} wide title={client ? "Edit client" : "Add website"}>

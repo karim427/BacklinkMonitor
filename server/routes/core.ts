@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { and, desc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, like, lt } from "drizzle-orm";
 import { db, schema as s } from "../db/index.js";
 import {
   ANCHOR_TYPES, CLUSTERS, LINK_ACTIONS, PRE_LIVE, SPAM_CODES, PLACEMENTS, REJECT_RULES, STAGES, VERDICTS, type AnchorBands, type AppSettings,
@@ -17,6 +17,8 @@ import { listLost, refreshLost } from "../services/ahrefsLost.js";
 import { previewDemoData, removeDemoData } from "../services/demoData.js";
 import { fetchUsage } from "../services/ahrefsUsageApi.js";
 import { allSourceChecks } from "../services/sourceCheckStore.js";
+import { fetchSitemapUrls, suggestPages, usablePages } from "../services/sitemap.js";
+import { analyzeKeyword } from "../services/keywordMetrics.js";
 
 export const core = Router();
 
@@ -183,25 +185,63 @@ const tpBody = z.object({
   clientId: z.number().int(), url: z.string().url(), keyword: z.string().min(1),
   currentRDs: z.number().int().min(0).default(0), rdsNeeded: z.number().int().min(0).default(0),
   status: z.enum(["Pending", "Approved", "Rejected"]).default("Pending"), approvalMonth: z.string().nullish(),
+  volume: z.number().int().min(0).nullish(), difficulty: z.number().int().min(0).max(100).nullish(), // kept in a settings row, so no migration
 });
+const kwKey = (id: number) => `target_kw:${id}`;
+const saveKw = async (id: number, b: { volume?: number | null; difficulty?: number | null }) => {
+  if (b.volume === undefined && b.difficulty === undefined) return;
+  const old = ((await db.select().from(s.settings).where(eq(s.settings.key, kwKey(id))))[0]?.value ?? {}) as Record<string, unknown>;
+  const value = { ...old, ...(b.volume !== undefined && { volume: b.volume }), ...(b.difficulty !== undefined && { difficulty: b.difficulty }) };
+  await db.insert(s.settings).values({ key: kwKey(id), value }).onConflictDoUpdate({ target: s.settings.key, set: { value } });
+};
+core.post("/target-pages/analyze", wrap(async (req) => {
+  const b = z.object({ url: z.string().url(), keyword: z.string().min(1) }).parse(req.body);
+  const key = await getAhrefsKey(); if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings to detect these automatically.");
+  try { return await analyzeKeyword(b.url, b.keyword, key); } catch (e) { throw new HttpError(502, `Ahrefs lookup failed: ${(e as Error).message}`); }
+}));
+/** Reads the client's sitemap and suggests pages and blog posts to build links to. Nothing is saved until the user picks. */
+core.post("/clients/:id/sitemap-scan", wrap(async (req) => {
+  const id = idOf(req);
+  const client = (await db.select().from(s.clients).where(eq(s.clients.id, id)))[0]; if (!client) throw new HttpError(404, "Client not found");
+  const all = await fetchSitemapUrls(client.domain);
+  if (!all.length) throw new HttpError(404, `Couldn't find a sitemap for ${client.domain}. Add pages by hand with Add target page.`);
+  const existing = (await db.select().from(s.targetPages).where(eq(s.targetPages.clientId, id))).map((t) => t.url);
+  const pages = usablePages(all, client.domain, existing);
+  return { total: all.length, usable: pages.length, suggestions: await suggestPages(client, pages) };
+}));
+core.post("/clients/:id/sitemap-add", wrap(async (req, res) => {
+  const id = idOf(req);
+  const b = z.object({ pages: z.array(z.object({ url: z.string().url(), keyword: z.string().min(1) })).min(1).max(30) }).parse(req.body);
+  const have = new Set((await db.select().from(s.targetPages).where(eq(s.targetPages.clientId, id))).map((t) => t.url.replace(/\/$/, "").toLowerCase()));
+  const fresh = b.pages.filter((p) => !have.has(p.url.replace(/\/$/, "").toLowerCase()));
+  res.status(201);
+  if (!fresh.length) return { added: 0 };
+  await db.insert(s.targetPages).values(fresh.map((p) => ({ clientId: id, url: p.url, keyword: p.keyword.trim(), status: "Pending" })));
+  return { added: fresh.length };
+}));
 core.get("/target-pages", wrap(async () => {
   const [clientRows, pageRows] = await Promise.all([db.select().from(s.clients), db.select().from(s.targetPages).orderBy(desc(s.targetPages.id))]);
   const clients = new Map(clientRows.map((c) => [c.id, c]));
-  const rows = pageRows.map((t) => ({ ...t, client: clients.get(t.clientId) ?? null }));
+  const kw = new Map((await db.select().from(s.settings).where(like(s.settings.key, "target_kw:%"))).map((r) => [Number(r.key.slice(10)), r.value as { volume?: number | null; difficulty?: number | null }]));
+  const rows = pageRows.map((t) => ({ ...t, volume: kw.get(t.id)?.volume ?? null, difficulty: kw.get(t.id)?.difficulty ?? null, client: clients.get(t.clientId) ?? null }));
   return { rows, totals: { approved: rows.filter((r) => r.status === "Approved").length, pending: rows.filter((r) => r.status === "Pending").length, rejected: rows.filter((r) => r.status === "Rejected").length, linksNeeded: rows.filter((r) => r.status !== "Rejected").reduce((a, r) => a + r.linksNeeded, 0) } };
 }));
 core.post("/target-pages/preview", wrap(async (req) => stage1(z.object({ rdsNeeded: z.number().min(0), currentRDs: z.number().min(0).default(0) }).parse(req.body).rdsNeeded)));
 core.post("/target-pages", wrap(async (req, res) => {
-  const b = tpBody.parse(req.body); const r = stage1(b.rdsNeeded, b.currentRDs);
+  const { volume, difficulty, ...b } = tpBody.parse(req.body); const r = stage1(b.rdsNeeded, b.currentRDs);
   res.status(201);
-  return (await db.insert(s.targetPages).values({ ...b, linksNeeded: r.linksNeeded, monthsToClose: r.monthsToClose }).returning())[0];
+  const row = (await db.insert(s.targetPages).values({ ...b, linksNeeded: r.linksNeeded, monthsToClose: r.monthsToClose }).returning())[0];
+  await saveKw(row.id, { volume, difficulty });
+  return row;
 }));
 core.put("/target-pages/:id", wrap(async (req) => {
-  const b = given(tpBody.partial().parse(req.body), req.body);
+  const { volume, difficulty, ...b } = given(tpBody.partial().parse(req.body), req.body);
   const patch: Record<string, unknown> = { ...b };
   if (b.rdsNeeded !== undefined) { const r = stage1(b.rdsNeeded, b.currentRDs ?? 0); patch.linksNeeded = r.linksNeeded; patch.monthsToClose = r.monthsToClose; }
   if (b.status === "Approved" && !b.approvalMonth) patch.approvalMonth = monthKey(new Date());
-  return (await db.update(s.targetPages).set(patch).where(eq(s.targetPages.id, idOf(req))).returning())[0];
+  const row = (await db.update(s.targetPages).set(patch).where(eq(s.targetPages.id, idOf(req))).returning())[0];
+  if (row) await saveKw(row.id, { volume, difficulty });
+  return row;
 }));
 core.delete("/target-pages/:id", wrap(async (req) => { (await db.delete(s.targetPages).where(eq(s.targetPages.id, idOf(req)))); return { ok: true }; }));
 
