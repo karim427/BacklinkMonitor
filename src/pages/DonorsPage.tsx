@@ -85,7 +85,7 @@ export default function DonorsPage() {
     setSyncing(true); setErr(null); try { const r = await post("/donors/sync-ahrefs"); setMsg(r.total === 0 ? "Every donor already has numbers. Use Look up on a row to refresh one." : `Looked up ${r.synced} of ${r.total} donors with no numbers${r.skipped ? ` (${r.skipped} already had numbers)` : ""}.`); reload(); } catch (e: any) { setErr(e.message); } finally { setSyncing(false); } }
   return (
     <>
-      <PageHeader title="Donors" description="Check A registry: US traffic, DR, niche, traffic floor and reuse." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Looking up…" : "Look up missing"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />
+      <PageHeader title="Donors" description="The websites that give your clients links. You don't need to add them: a donor appears here by itself when you add a link from that site." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" disabled={syncing} onClick={sync}>{syncing ? "Looking up…" : "Look up missing"}</Button><Button onClick={() => setAdding(true)}>Add donor</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       {msg && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">{msg}</div>}
       <KpiRow><Kpi label="Donors" value={t?.donors} loading={loading} /><Kpi label="Average DR" value={t?.avgDr} loading={loading} /><Kpi label="Local donors" value={t?.local} loading={loading} /><Kpi label="Reuse warnings" value={t?.reuseWarnings} tone="amber" loading={loading} /></KpiRow>
@@ -96,7 +96,7 @@ export default function DonorsPage() {
           <Select className="w-56" value={preview} onChange={setPreview} placeholder="Preview reuse for a client" options={(cl?.rows ?? []).map((c: any) => ({ value: c.id, label: c.name }))} />
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.local} onChange={(e) => setF({ ...f, local: e.target.checked })} />Local only</label>
         </FilterBar>
-        {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No donors" /> : (
+        {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No donors yet" hint="They appear automatically when you add a link on the Links page." /> : (
           <Table><THead cols={["Donor", <>DR<InfoTip text="Domain Rating from Ahrefs (0 to 100). 20 or more is required." to="/guide#donors" /></>, <>US %<InfoTip text="Share of the site's visitors from the US. 60% or more is required." to="/guide#donors" /></>, <>Organic traffic<InfoTip text="Monthly visits from search. Minimum 1,000, or 300 for local sites." to="/guide#donors" /></>, "Local area", <>Clients<InfoTip text="How many different clients this site already links to. More than 3 is rejected." to="/guide#donors" /></>, "Last used", ""]} />
             <tbody>{pg.slice.map((r) => (
               <tr key={r.id}><td><div className="font-medium">{r.domain}</div><Sub>{r.name} · {r.cluster}</Sub>{r.crawl?.scores && (() => { const [c, n] = Object.entries(r.crawl.scores as Record<string, number>).sort((a, b) => b[1] - a[1])[0]; return <Sub>Blog: {r.crawl.niche || "read"} · best fit {c} ({n})</Sub>; })()}</td><td>{r.dr}</td>

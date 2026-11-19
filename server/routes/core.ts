@@ -92,6 +92,7 @@ core.get("/dashboard", wrap(async (req) => {
   const lost = links.filter((l) => (l.stage === "Lost" || l.verdict === "Not relevant") && (l.lastCheckedAt ?? l.createdAt).getTime() >= sixty);
 
   return {
+    setup: { clients: clients.length, targetPages: pages.length, links: links.length, checked: links.some((l) => !!l.lastCheckedAt) },
     month, target, recurringDefault: !ws, progress: prog, clientsAtTarget, clientCount: clients.length,
     chips: {
       unverified: inMonth.filter((l) => l.verificationStatus === "Unverified").length,

@@ -8,6 +8,24 @@ type Item = [term: string, meaning: string];
 interface Section { id: string; title: string; intro?: string; items: Item[] }
 
 const SECTIONS: Section[] = [
+  { id: "start", title: "Start here: the whole process in 5 steps", intro: "Do these in order the first time. After that you only repeat steps 3 and 4 each time a link is placed.", items: [
+    ["1. Add the client's website", "Clients > Add website. Enter the real domain (for example example.com), pick the niche and set how many links you want each month. After you save, a window opens to choose pages (step 2)."],
+    ["2. Choose the pages to get links for", "Target pages > Find pages from sitemap. We read the website's sitemap and suggest service pages and blog posts worth boosting. Tick the ones you want, fix the keyword if it is wrong, and click Add. Then use Detect keyword data on a row to fill in search volume, difficulty and how many more linking sites it needs (needs the Ahrefs key)."],
+    ["3. Add a link when it is placed", "Links > Add link. See the next section for each box."],
+    ["4. Check the link", "Click Verify now. A link that is not live yet shows Not live yet. Once the link is on the page, set its Status to Live and the Check column tells you if it counts toward the month."],
+    ["5. Review every month", "Dashboard shows each client against the target. Rechecks lists links to look at again (30 days after placement, then every 90 days). Fix anything marked Partly relevant within 14 days."],
+  ] },
+  { id: "add-link", title: "How to add a link, box by box", intro: "Links > Add link. Only the first few boxes are needed. You can edit the rest later.", items: [
+    ["Client", "Who the link is for. Pick from the list."],
+    ["Target page", "The page on the client's site you are building links to. It comes from step 2. You can leave it empty."],
+    ["Source URL", "The full address of the page where the link sits, on the other website (the donor). Paste it exactly."],
+    ["Target URL", "The page on the client's site the link points to. This is checked: the link must go to exactly this address."],
+    ["Anchor text", "The clickable words of the link. Leave empty if you do not know yet."],
+    ["Status", "Pending (planned), In process (placed, waiting to show up) or Live (visible on the page). Only Live links are judged."],
+    ["Placed date", "The day it was placed. It cannot be in the future. The first recheck is 30 days after this."],
+    ["The donor", "You do not add it. The website in the Source URL is added to the Donors page for you."],
+    ["After you save", "The link appears in the Links table. Click Verify now to check it, or the daily check will do it."],
+  ] },
   { id: "status", title: "Status: where a link is in its life", intro: "Every link moves left to right. Relevance is only checked once a link is live.", items: [
     ["Pending", "Planned, but not placed yet. Nothing is checked."],
     ["In process", "Placed and waiting to appear on the page. The daily check looks for it until it shows up, then it goes Live."],
@@ -53,7 +71,7 @@ const SECTIONS: Section[] = [
     ["Natural", "Anything else, e.g. 'this guide' (15–25%)."],
     ["In band / Out", "Whether that type's share is inside its target range. Ranges can be changed in Settings. The type is chosen by whoever adds the link."],
   ] },
-  { id: "donors", title: "Donors (the sites that link to you)", items: [
+  { id: "donors", title: "Donors (the sites that link to you)", intro: "You never add donors by hand: a site is listed here automatically when you add a link from it. The numbers below fill in by themselves when the Ahrefs key is set; if they are missing, links are judged on everything else.", items: [
     ["DR", "Domain Rating from Ahrefs, 0–100: how strong the site's links are. 20 or more is required."],
     ["US %", "Share of the site's visitors from the US. 60% or more is required."],
     ["Organic traffic", "Monthly visits from search. Minimum 1,000, or 300 for local sites."],

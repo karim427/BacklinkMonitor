@@ -5,6 +5,7 @@ import { post, useApi } from "@/lib/api";
 import { AdminOnly } from "@/lib/auth";
 import { currentMonth, monthLabel } from "@/lib/utils";
 import { InfoTip } from "@/components/InfoTip";
+import { GettingStarted } from "@/features/guide/GettingStarted";
 import { Kpi, KpiRow, MonthPicker, PageHeader, RefreshButton, VerdictBadge } from "@/features/shared/common";
 
 export default function DashboardPage() {
@@ -28,12 +29,14 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Monthly progress, anchor mix compliance and rechecks across every client." actions={<>
+      <PageHeader title="Dashboard" description="How many good links each client has got this month, and what needs your attention." actions={<>
         <MonthPicker month={month} onChange={setMonth} /><RefreshButton onClick={reload} loading={loading} />
         <Button variant="outline" onClick={() => nav("/links")}>Open links</Button>
         <AdminOnly><Button onClick={runDue} disabled={running}>{running ? "Running…" : "Run due rechecks →"}</Button></AdminOnly>
       </>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
+
+      <GettingStarted setup={d?.setup} />
 
       <Card className="mb-6 p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">

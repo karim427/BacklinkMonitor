@@ -34,7 +34,7 @@ export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolea
   }
   const clientPages = pages.filter((p) => String(p.clientId) === String(f.clientId));
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} wide title={link ? "Edit link" : "Add link"} description="Every backlink is reviewed against Stage 1, checks A–C and the reject list.">
+    <Dialog open={open} onOpenChange={onOpenChange} wide title={link ? "Edit link" : "Add link"} description="Pick the client, paste the page where the link sits (the donor) and the page it points to. The donor site is added for you, and the link is checked once it is live.">
       <form onSubmit={submit} className="space-y-3">
         {err && <ErrorBanner message={err} />}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -43,8 +43,8 @@ export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolea
           <Field label="Donor"><Select value={f.donorId} onChange={(v) => set("donorId", v)} placeholder="Auto-create from source URL" options={donors.map((d) => ({ value: d.id, label: `${d.domain} (DR ${d.dr})` }))} /></Field>
           <Field label="…or new donor domain"><Input value={f.donorDomain} disabled={!!f.donorId} onChange={(e) => set("donorDomain", e.target.value)} placeholder="example.com" /></Field>
         </div>
-        <Field label="Source URL *"><Input required type="url" value={f.sourceUrl} onChange={(e) => set("sourceUrl", e.target.value)} placeholder="https://donor.com/post" /></Field>
-        <Field label="Target URL *"><Input required type="url" value={f.targetUrl} onChange={(e) => set("targetUrl", e.target.value)} placeholder="https://client.com/page" /></Field>
+        <Field label="Source URL *" hint="The page on the other website where the link sits. Paste the full address."><Input required type="url" value={f.sourceUrl} onChange={(e) => set("sourceUrl", e.target.value)} placeholder="https://donor.com/post" /></Field>
+        <Field label="Target URL *" hint="The page on the client's site that the link should point to."><Input required type="url" value={f.targetUrl} onChange={(e) => set("targetUrl", e.target.value)} placeholder="https://client.com/page" /></Field>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Anchor text"><Input value={f.anchorText} onChange={(e) => set("anchorText", e.target.value)} /></Field>
           <Field label="Anchor type"><Select value={f.anchorType} onChange={(v) => set("anchorType", v)} options={ANCHOR_TYPES.map((a) => ({ value: a, label: a }))} /></Field>
@@ -52,7 +52,7 @@ export function LinkDialog({ open, onOpenChange, link, onSaved }: { open: boolea
           <Field label="Status" hint="Relevance is only checked once the link is live."><Select value={f.action} onChange={(v) => set("action", v)} placeholder="Automatic (Pending, or In process once placed)"
             options={[{ value: "PENDING", label: "Pending" }, { value: "IN_PROCESS", label: "In process" }, { value: "LIVE", label: "Live" }, { value: "REJECTED", label: "Rejected" }, ...(["REPLACE", "LOST"].includes(f.action) ? [{ value: f.action, label: f.action === "LOST" ? "Lost" : "Replace" }] : [])]} /></Field>
           <Field label="Name"><Select value={f.reviewer} onChange={(v) => set("reviewer", v)} placeholder="Select a person" options={[...people.map((p) => ({ value: p.name, label: p.name })), ...(f.reviewer && !people.some((p) => p.name === f.reviewer) ? [{ value: f.reviewer, label: f.reviewer }] : [])]} /></Field>
-          <div className="sm:col-span-3"><Field label="Placed at" hint="Setting a date moves the link to Placed and schedules rechecks.">
+          <div className="sm:col-span-3"><Field label="Placed date" hint="Setting a date moves the link to Placed and schedules rechecks.">
             <div className="flex gap-2"><Input type="date" max={todayLocal()} value={f.placedAt} onChange={(e) => set("placedAt", e.target.value)} />
               <Button type="button" variant="outline" onClick={() => set("placedAt", todayLocal())}>Today</Button></div></Field></div>
         </div>

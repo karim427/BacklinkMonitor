@@ -23,7 +23,7 @@ export default function RechecksPage() {
   async function run(id?: number) { setBusy(id ?? "all"); setErr(null); try { id ? await post(`/links/${id}/verify`) : await post("/rechecks/run-due"); reload(); setRan((n) => n + 1); } catch (e: any) { setErr(e.message); } finally { setBusy(null); } }
   return (
     <>
-      <PageHeader title="Rechecks" description="Monthly results by client: indexed, spam and lost links. First recheck 30 days after placement, then every 90 days." actions={<>{view === "client" && <MonthPicker month={month} onChange={setMonth} />}<RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button disabled={busy === "all"} onClick={() => run()}>{busy === "all" ? "Running…" : "Run all due"}</Button></AdminOnly></>} />
+      <PageHeader title="Rechecks" description="Links that are due to be looked at again. Each link is rechecked 30 days after it is placed, then every 90 days, to see it is still there." actions={<>{view === "client" && <MonthPicker month={month} onChange={setMonth} />}<RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button disabled={busy === "all"} onClick={() => run()}>{busy === "all" ? "Running…" : "Run all due"}</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       <div className="mb-4 inline-flex rounded-lg border border-zinc-200 p-0.5 text-sm">
         {([["client", "By client"], ["queue", "Due queue"]] as const).map(([v, label]) => (

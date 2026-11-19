@@ -31,7 +31,7 @@ export default function ClientsPage() {
       </KpiRow>
       <Panel>
         <FilterBar dirty={!!q} onClear={() => setQ("")}><Input className="w-64" placeholder="Search clients…" value={q} onChange={(e) => setQ(e.target.value)} /></FilterBar>
-        {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No clients found" /> : (
+        {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No clients yet" hint="Click Add website. We will then read its sitemap and suggest the pages to get links for." /> : (
           <Table>
             <THead cols={["Client", "Cluster", "Target pages", "Target backlinks", "Received", "Remaining"]} />
             <tbody>
