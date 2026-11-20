@@ -4,17 +4,18 @@ import { Badge, Button, EmptyState, ErrorBanner, Field, Input, Select } from "@/
 import { ConfirmDialog, Dialog, RowMenu } from "@/components/ui/overlays";
 import { del, get, post, put, useApi } from "@/lib/api";
 import { SitemapDialog } from "@/features/clients/SitemapDialog";
+import { AutoPlanDialog } from "@/features/clients/AutoPlanDialog";
 import { FilterBar, Kpi, KpiRow, PageHeader, Panel, Pager, RefreshButton, Sub, Table, TableSkeleton, THead, usePaged } from "@/features/shared/common";
 
 const tone = (s: string) => (s === "Approved" ? "green" : s === "Rejected" ? "red" : "amber");
 
 function TargetPageDialog({ open, onOpenChange, row, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; row: any; onSaved: () => void }) {
-  const [clients, setClients] = useState<any[]>([]);
-  const [f, setF] = useState<any>({ clientId: "", url: "", keyword: "", currentRDs: 0, rdsNeeded: 0 });
+  const [clients, setClients] = useState<any[]>([]); const [people, setPeople] = useState<any[]>([]);
+  const [f, setF] = useState<any>({ clientId: "", url: "", keyword: "", currentRDs: 0, rdsNeeded: 0, assigneeId: "" });
   const [prev, setPrev] = useState<any>(null); const [err, setErr] = useState<string | null>(null);
   const [kw, setKw] = useState<{ volume: number | null; difficulty: number | null; topRDs: number | null } | null>(null);
   const [detecting, setDetecting] = useState(false); const [note, setNote] = useState<string | null>(null);
-  useEffect(() => { if (open) { setErr(null); get("/clients").then((c) => setClients(c.rows)); setNote(null); setKw(row && (row.volume != null || row.difficulty != null) ? { volume: row.volume, difficulty: row.difficulty, topRDs: null } : null); setF(row ? { clientId: String(row.clientId), url: row.url, keyword: row.keyword, currentRDs: row.currentRDs, rdsNeeded: row.rdsNeeded } : { clientId: "", url: "", keyword: "", currentRDs: 0, rdsNeeded: 0 }); } }, [open, row]);
+  useEffect(() => { if (open) { setErr(null); get("/clients").then((c) => setClients(c.rows)); get("/people").then((p) => setPeople(p.rows)).catch(() => {}); setNote(null); setKw(row && (row.volume != null || row.difficulty != null) ? { volume: row.volume, difficulty: row.difficulty, topRDs: null } : null); setF(row ? { clientId: String(row.clientId), url: row.url, keyword: row.keyword, currentRDs: row.currentRDs, rdsNeeded: row.rdsNeeded, assigneeId: row.assigneeId ? String(row.assigneeId) : "" } : { clientId: "", url: "", keyword: "", currentRDs: 0, rdsNeeded: 0, assigneeId: "" }); } }, [open, row]);
   // Adding a page: once the URL and keyword are filled in, look up volume, difficulty and the RDs needed by itself.
   useEffect(() => {
     if (!open || row || !/^https?:\/\/.+\..+/.test(f.url) || f.keyword.trim().length < 2) return;
@@ -32,7 +33,7 @@ function TargetPageDialog({ open, onOpenChange, row, onSaved }: { open: boolean;
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const body = { clientId: Number(f.clientId), url: f.url, keyword: f.keyword, currentRDs: Number(f.currentRDs), rdsNeeded: Number(f.rdsNeeded), ...(kw ? { volume: kw.volume, difficulty: kw.difficulty } : {}) };
+    const body = { clientId: Number(f.clientId), url: f.url, keyword: f.keyword, currentRDs: Number(f.currentRDs), rdsNeeded: Number(f.rdsNeeded), assigneeId: f.assigneeId ? Number(f.assigneeId) : null, ...(kw ? { volume: kw.volume, difficulty: kw.difficulty } : {}) };
     try { row ? await put(`/target-pages/${row.id}`, body) : await post("/target-pages", body); onSaved(); onOpenChange(false); } catch (e: any) { setErr(e.message); }
   }
   return (
@@ -42,6 +43,7 @@ function TargetPageDialog({ open, onOpenChange, row, onSaved }: { open: boolean;
         <Field label="Client *"><Select value={f.clientId} onChange={(v) => set("clientId", v)} placeholder="Select client" options={clients.map((c) => ({ value: c.id, label: c.name }))} /></Field>
         <Field label="Page URL *"><Input required type="url" value={f.url} onChange={(e) => set("url", e.target.value)} /></Field>
         <Field label="Keyword *"><Input required value={f.keyword} onChange={(e) => set("keyword", e.target.value)} /></Field>
+        <Field label="Assigned to"><Select value={f.assigneeId} onChange={(v) => set("assigneeId", v)} placeholder="Nobody yet" options={people.map((p) => ({ value: p.id, label: p.name }))} /></Field>
         {(detecting || kw || note) && <div className="rounded-lg border bg-slate-50 p-3 text-sm">
           {detecting ? <span className="text-slate-500">Looking up this keyword in Ahrefs…</span> : kw ? <>
             <b>{kw.volume != null ? kw.volume.toLocaleString() : "—"}</b> searches a month · difficulty <b>{kw.difficulty ?? "—"}</b>/100
@@ -62,11 +64,12 @@ function TargetPageDialog({ open, onOpenChange, row, onSaved }: { open: boolean;
 
 export default function TargetPagesPage() {
   const { data, error, loading, reload } = useApi("/target-pages");
-  const [f, setF] = useState({ q: "", client: "", status: "", month: "" });
-  const [dlg, setDlg] = useState<{ row: any } | null>(null); const [scan, setScan] = useState(false); const [delT, setDelT] = useState<any>(null); const [err, setErr] = useState<string | null>(null);
-  const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.keyword} ${r.url}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.client || String(r.clientId) === f.client) && (!f.status || r.status === f.status) && (!f.month || r.approvalMonth === f.month));
+  const [f, setF] = useState({ q: "", client: "", status: "", month: "", assignee: "" });
+  const [dlg, setDlg] = useState<{ row: any } | null>(null); const [scan, setScan] = useState(false); const [auto, setAuto] = useState(false); const [scanClient, setScanClient] = useState<number | null>(null); const [delT, setDelT] = useState<any>(null); const [err, setErr] = useState<string | null>(null);
+  const rows: any[] = (data?.rows ?? []).filter((r: any) => (!f.q || `${r.keyword} ${r.url}`.toLowerCase().includes(f.q.toLowerCase())) && (!f.client || String(r.clientId) === f.client) && (!f.status || r.status === f.status) && (!f.month || r.approvalMonth === f.month) && (!f.assignee || String(r.assigneeId ?? "") === f.assignee));
   const pg = usePaged(rows, [f]); const t = data?.totals;
   const clients = [...new Map((data?.rows ?? []).map((r: any) => [r.clientId, r.client?.name])).entries()].map(([value, label]) => ({ value: value as number, label: label as string }));
+  const assignees = [...new Map((data?.rows ?? []).filter((r: any) => r.assigneeId).map((r: any) => [r.assigneeId, r.assignee])).entries()].map(([value, label]) => ({ value: value as number, label: label as string }));
   const months = [...new Set<string>((data?.rows ?? []).map((r: any) => r.approvalMonth).filter(Boolean))];
   const detect = async (r: any) => {
     try { const a = await post("/target-pages/analyze", { url: r.url, keyword: r.keyword }); await put(`/target-pages/${r.id}`, { currentRDs: a.currentRDs, rdsNeeded: a.rdsNeeded, volume: a.volume, difficulty: a.difficulty }); reload(); } catch (e: any) { setErr(e.message); }
@@ -75,28 +78,30 @@ export default function TargetPagesPage() {
   const dirty = Object.values(f).some(Boolean);
   return (
     <>
-      <PageHeader title="Target pages" description="The pages on your clients' sites that you want links to. Pick a page, give it a keyword, and approve it if it can be won in 6 months or less." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" onClick={() => setScan(true)}>Find pages from sitemap</Button><Button onClick={() => setDlg({ row: null })}>Add target page</Button></AdminOnly></>} />
+      <PageHeader title="Target pages" description="The pages on your clients' sites that you want links to. Pick a page, give it a keyword, and approve it if it can be won in 6 months or less." actions={<><RefreshButton onClick={reload} loading={loading} /><AdminOnly><Button variant="outline" onClick={() => setScan(true)}>Pick pages by hand</Button><Button variant="outline" onClick={() => setAuto(true)}>Auto-pick pages</Button><Button onClick={() => setDlg({ row: null })}>Add target page</Button></AdminOnly></>} />
       {(error || err) && <div className="mb-4"><ErrorBanner message={(error || err)!} onRetry={reload} /></div>}
       <KpiRow><Kpi label="Approved" value={t?.approved} tone="green" loading={loading} /><Kpi label="Pending" value={t?.pending} tone="amber" loading={loading} /><Kpi label="Rejected" value={t?.rejected} tone="red" loading={loading} /><Kpi label="Links needed" value={t?.linksNeeded} loading={loading} /></KpiRow>
       <Panel>
-        <FilterBar dirty={dirty} onClear={() => setF({ q: "", client: "", status: "", month: "" })}>
+        <FilterBar dirty={dirty} onClear={() => setF({ q: "", client: "", status: "", month: "", assignee: "" })}>
           <Input className="w-56" placeholder="Search…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
           <Select className="w-40" value={f.client} onChange={(v) => setF({ ...f, client: v })} placeholder="All clients" options={clients} />
           <Select className="w-36" value={f.status} onChange={(v) => setF({ ...f, status: v })} placeholder="All statuses" options={["Pending", "Approved", "Rejected"].map((s) => ({ value: s, label: s }))} />
+          <Select className="w-40" value={f.assignee} onChange={(v) => setF({ ...f, assignee: v })} placeholder="Anyone" options={assignees} />
           <Select className="w-40" value={f.month} onChange={(v) => setF({ ...f, month: v })} placeholder="Approval month" options={months.map((m) => ({ value: m, label: m }))} />
         </FilterBar>
         {loading && !data ? <TableSkeleton /> : !rows.length ? <EmptyState title="No target pages yet" hint="Click Find pages from sitemap to get suggestions, or Add target page to enter one yourself." /> : (
-          <Table><THead cols={["Client", "Keyword", "Volume", "Difficulty", "RDs needed", "Links needed", "Months", "Status", "Approval month", ""]} />
+          <Table><THead cols={["Client", "Keyword", "Volume", "Difficulty", "Sites needed", "Months", "Assigned to", "Status", "Approval month", ""]} />
             <tbody>{pg.slice.map((r) => (
               <tr key={r.id}><td className="font-medium">{r.client?.name}</td><td className="max-w-64"><div>{r.keyword}</div><Sub><span className="block truncate">{r.url}</span></Sub></td>
-                <td>{r.volume != null ? r.volume.toLocaleString() : "—"}</td><td>{r.difficulty ?? "—"}</td><td>{r.rdsNeeded}</td><td>{r.linksNeeded}</td><td>{r.monthsToClose}</td><td><Badge tone={tone(r.status)}>{r.status}</Badge></td><td>{r.approvalMonth ?? "—"}</td>
+                <td>{r.volume != null ? r.volume.toLocaleString() : "—"}</td><td>{r.difficulty ?? "—"}</td><td>{r.rdsNeeded}</td><td>{r.monthsToClose}</td><td>{r.assignee ?? <span className="text-zinc-400">Nobody</span>}</td><td><Badge tone={tone(r.status)}>{r.status}</Badge></td><td>{r.approvalMonth ?? "—"}</td>
                 <td><AdminOnly><RowMenu items={[{ label: "Approve", onSelect: () => setStatus(r, "Approved"), hidden: r.status === "Approved" }, { label: "Reject", onSelect: () => setStatus(r, "Rejected"), hidden: r.status === "Rejected" }, { label: "Detect keyword data", onSelect: () => detect(r) }, { label: "Edit", onSelect: () => setDlg({ row: r }) }, { label: "Delete", danger: true, onSelect: () => setDelT(r) }]} /></AdminOnly></td></tr>
             ))}</tbody></Table>
         )}
         <Pager p={pg} />
       </Panel>
       <TargetPageDialog open={!!dlg} onOpenChange={(o) => !o && setDlg(null)} row={dlg?.row} onSaved={reload} />
-      <SitemapDialog open={scan} onOpenChange={setScan} onAdded={reload} />
+      <AutoPlanDialog open={auto} onOpenChange={setAuto} onDone={reload} onManual={(id) => { setScanClient(id); setScan(true); }} />
+      <SitemapDialog open={scan} onOpenChange={(o) => { setScan(o); if (!o) setScanClient(null); }} clientId={scanClient} onAdded={reload} />
       <ConfirmDialog open={!!delT} onOpenChange={(o) => !o && setDelT(null)} title="Delete target page?" description={delT?.keyword} onConfirm={async () => { await del(`/target-pages/${delT.id}`); reload(); }} />
     </>
   );

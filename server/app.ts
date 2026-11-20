@@ -5,6 +5,8 @@ import { ZodError, z } from "zod";
 import { core, HttpError } from "./routes/core.js";
 import { extra } from "./routes/extra.js";
 import { runDueRechecks } from "./services/linkService.js";
+import { getAhrefsKey } from "./services/secrets.js";
+import { planAllClients } from "./services/autoPlan.js";
 import { cronGuard, gate } from "./auth.js";
 import { auth, users } from "./routes/users.js";
 import { opportunities } from "./routes/opportunities.js";
@@ -18,6 +20,9 @@ app.use(express.urlencoded({ extended: false, limit: "5mb" })); // forms posted 
 const misc = Router();
 misc.get("/cron/recheck", cronGuard, async (_req, res, next) => {
   try { const r = await runDueRechecks(); res.json({ rechecked: r.length, results: r }); } catch (e) { next(e); }
+});
+misc.get("/cron/plan-pages", cronGuard, async (_req, res, next) => {
+  try { const key = await getAhrefsKey(); if (!key) return res.json({ skipped: "No Ahrefs key" }); res.json({ results: await planAllClients(key) }); } catch (e) { next(e); }
 });
 misc.get("/health", (_req, res) => res.json({ ok: true }));
 

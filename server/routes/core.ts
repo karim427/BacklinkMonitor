@@ -19,6 +19,8 @@ import { fetchUsage } from "../services/ahrefsUsageApi.js";
 import { allSourceChecks } from "../services/sourceCheckStore.js";
 import { fetchSitemapUrls, suggestPages, usablePages } from "../services/sitemap.js";
 import { analyzeKeyword } from "../services/keywordMetrics.js";
+import { allMeta, saveMeta } from "../services/targetMeta.js";
+import { planClientPages } from "../services/autoPlan.js";
 
 export const core = Router();
 
@@ -186,15 +188,8 @@ const tpBody = z.object({
   clientId: z.number().int(), url: z.string().url(), keyword: z.string().min(1),
   currentRDs: z.number().int().min(0).default(0), rdsNeeded: z.number().int().min(0).default(0),
   status: z.enum(["Pending", "Approved", "Rejected"]).default("Pending"), approvalMonth: z.string().nullish(),
-  volume: z.number().int().min(0).nullish(), difficulty: z.number().int().min(0).max(100).nullish(), // kept in a settings row, so no migration
+  volume: z.number().int().min(0).nullish(), difficulty: z.number().int().min(0).max(100).nullish(), assigneeId: z.number().int().nullish(), // volume, difficulty and assignee live in a settings row, so no migration
 });
-const kwKey = (id: number) => `target_kw:${id}`;
-const saveKw = async (id: number, b: { volume?: number | null; difficulty?: number | null }) => {
-  if (b.volume === undefined && b.difficulty === undefined) return;
-  const old = ((await db.select().from(s.settings).where(eq(s.settings.key, kwKey(id))))[0]?.value ?? {}) as Record<string, unknown>;
-  const value = { ...old, ...(b.volume !== undefined && { volume: b.volume }), ...(b.difficulty !== undefined && { difficulty: b.difficulty }) };
-  await db.insert(s.settings).values({ key: kwKey(id), value }).onConflictDoUpdate({ target: s.settings.key, set: { value } });
-};
 core.post("/target-pages/analyze", wrap(async (req) => {
   const b = z.object({ url: z.string().url(), keyword: z.string().min(1) }).parse(req.body);
   const key = await getAhrefsKey(); if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings to detect these automatically.");
@@ -220,28 +215,35 @@ core.post("/clients/:id/sitemap-add", wrap(async (req, res) => {
   await db.insert(s.targetPages).values(fresh.map((p) => ({ clientId: id, url: p.url, keyword: p.keyword.trim(), status: "Pending" })));
   return { added: fresh.length };
 }));
+/** Picks the easiest pages from the client's sitemap, adds them as approved target pages with their numbers and gives each to a teammate. Needs the Ahrefs key. */
+core.post("/clients/:id/auto-plan", wrap(async (req) => {
+  const key = await getAhrefsKey(); if (!key) throw new HttpError(400, "No Ahrefs API key. Add one in Settings so pages can be picked automatically, or choose pages by hand.");
+  const count = z.object({ count: z.number().int().min(1).max(10).optional() }).parse(req.body ?? {}).count;
+  try { return await planClientPages(idOf(req), key, { count }); } catch (e) { throw new HttpError(e instanceof HttpError ? e.status : 502, (e as Error).message); }
+}));
 core.get("/target-pages", wrap(async () => {
   const [clientRows, pageRows] = await Promise.all([db.select().from(s.clients), db.select().from(s.targetPages).orderBy(desc(s.targetPages.id))]);
   const clients = new Map(clientRows.map((c) => [c.id, c]));
-  const kw = new Map((await db.select().from(s.settings).where(like(s.settings.key, "target_kw:%"))).map((r) => [Number(r.key.slice(10)), r.value as { volume?: number | null; difficulty?: number | null }]));
-  const rows = pageRows.map((t) => ({ ...t, volume: kw.get(t.id)?.volume ?? null, difficulty: kw.get(t.id)?.difficulty ?? null, client: clients.get(t.clientId) ?? null }));
+  const meta = await allMeta();
+  const people = new Map((await db.select().from(s.users)).map((u) => [u.id, u.name || u.email.split("@")[0]]));
+  const rows = pageRows.map((t) => { const m = meta.get(t.id); return { ...t, volume: m?.volume ?? null, difficulty: m?.difficulty ?? null, assigneeId: m?.assigneeId ?? null, assignee: m?.assigneeId ? people.get(m.assigneeId) ?? null : null, auto: !!m?.auto, client: clients.get(t.clientId) ?? null }; });
   return { rows, totals: { approved: rows.filter((r) => r.status === "Approved").length, pending: rows.filter((r) => r.status === "Pending").length, rejected: rows.filter((r) => r.status === "Rejected").length, linksNeeded: rows.filter((r) => r.status !== "Rejected").reduce((a, r) => a + r.linksNeeded, 0) } };
 }));
 core.post("/target-pages/preview", wrap(async (req) => stage1(z.object({ rdsNeeded: z.number().min(0), currentRDs: z.number().min(0).default(0) }).parse(req.body).rdsNeeded)));
 core.post("/target-pages", wrap(async (req, res) => {
-  const { volume, difficulty, ...b } = tpBody.parse(req.body); const r = stage1(b.rdsNeeded, b.currentRDs);
+  const { volume, difficulty, assigneeId, ...b } = tpBody.parse(req.body); const r = stage1(b.rdsNeeded, b.currentRDs);
   res.status(201);
   const row = (await db.insert(s.targetPages).values({ ...b, linksNeeded: r.linksNeeded, monthsToClose: r.monthsToClose }).returning())[0];
-  await saveKw(row.id, { volume, difficulty });
+  await saveMeta(row.id, { volume, difficulty, assigneeId });
   return row;
 }));
 core.put("/target-pages/:id", wrap(async (req) => {
-  const { volume, difficulty, ...b } = given(tpBody.partial().parse(req.body), req.body);
+  const { volume, difficulty, assigneeId, ...b } = given(tpBody.partial().parse(req.body), req.body);
   const patch: Record<string, unknown> = { ...b };
   if (b.rdsNeeded !== undefined) { const r = stage1(b.rdsNeeded, b.currentRDs ?? 0); patch.linksNeeded = r.linksNeeded; patch.monthsToClose = r.monthsToClose; }
   if (b.status === "Approved" && !b.approvalMonth) patch.approvalMonth = monthKey(new Date());
   const row = (await db.update(s.targetPages).set(patch).where(eq(s.targetPages.id, idOf(req))).returning())[0];
-  if (row) await saveKw(row.id, { volume, difficulty });
+  if (row) await saveMeta(row.id, { volume, difficulty, assigneeId });
   return row;
 }));
 core.delete("/target-pages/:id", wrap(async (req) => { (await db.delete(s.targetPages).where(eq(s.targetPages.id, idOf(req)))); return { ok: true }; }));

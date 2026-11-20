@@ -13,7 +13,7 @@ export function GettingStarted({ setup }: { setup?: SetupState }) {
   if (!setup || hidden) return null;
   const steps = [
     { done: setup.clients > 0, to: "/clients", title: "Add the client's website", text: "Clients > Add website. Enter the real domain and pick the niche." },
-    { done: setup.targetPages > 0, to: "/target-pages", title: "Choose the pages to get links for", text: "Target pages > Find pages from sitemap. Tick the pages and blogs you want, and fix the keyword if needed." },
+    { done: setup.targetPages > 0, to: "/target-pages", title: "Check the pages we picked", text: "Target pages shows the pages picked from the sitemap, with keyword difficulty, volume and who each one is assigned to. Change any of them with Edit." },
     { done: setup.links > 0, to: "/links", title: "Add each link when it is placed", text: "Links > Add link. Pick the client, paste the page where the link sits and the page it points to. The donor site is added for you." },
     { done: setup.checked, to: "/links", title: "Check the link", text: "Click Verify now on the link. Once it is live, the Check column tells you if it counts." },
     { done: false, to: "/rechecks", title: "Come back every month", text: "Dashboard shows progress against the target. Rechecks shows which links are due to be looked at again." },

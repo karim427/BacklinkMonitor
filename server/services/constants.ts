@@ -104,3 +104,8 @@ export const DEFAULT_SETTINGS = {
   anchorBands: DEFAULT_ANCHOR_BANDS,
 };
 export type AppSettings = typeof DEFAULT_SETTINGS;
+
+/** Automatic page picking: how many pages a client gets per month, and what counts as an easy win. */
+export const AUTO_PAGES_PER_MONTH = 3;
+export const AUTO_MAX_DIFFICULTY = 40;   // keyword difficulty (0-100) at or below this
+export const AUTO_MIN_VOLUME = 50;       // searches a month at or above this
