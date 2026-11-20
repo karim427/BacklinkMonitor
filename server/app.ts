@@ -31,6 +31,8 @@ app.use("/api", (_req, res) => res.status(404).json({ error: { message: "Not fou
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) return res.status(400).json({ error: { message: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "), issues: err.issues } });
   if (err instanceof HttpError) return res.status(err.status).json({ error: { message: err.message } });
+  const pg = err as { code?: string; cause?: { code?: string } };
+  if ((pg.code ?? pg.cause?.code) === "23505") return res.status(409).json({ error: { message: "That already exists. Open the existing one and edit it instead." } });
   console.error(err);
-  res.status(500).json({ error: { message: (err as Error).message ?? "Server error" } });
+  res.status(500).json({ error: { message: /^Failed query:/.test((err as Error).message ?? "") ? "Couldn't save. Please try again, and tell us if it keeps happening." : (err as Error).message ?? "Server error" } });
 });

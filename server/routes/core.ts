@@ -142,8 +142,15 @@ core.get("/clients", wrap(async (req) => {
 }));
 core.post("/clients", wrap(async (req, res) => {
   const b = clientBody.parse(req.body);
+  const existing = await db.select().from(s.clients);
+  const host = hostOf(b.domain);
+  const same = existing.find((c) => hostOf(c.domain) === host);
+  if (same) throw new HttpError(409, `${same.name} already uses ${host}. Open it from Clients and use Edit instead of adding it again.`);
+  // Two clients can share a name (the slug must be unique), so add a number when it is taken.
+  const taken = new Set(existing.map((c) => c.slug)); const base = slugify(b.name) || "client"; let slug = base;
+  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
   res.status(201);
-  return (await db.insert(s.clients).values({ ...b, slug: slugify(b.name) }).returning())[0];
+  return (await db.insert(s.clients).values({ ...b, slug }).returning())[0];
 }));
 core.put("/clients/:id", wrap(async (req) => {
   const b = given(clientBody.partial().parse(req.body), req.body);
